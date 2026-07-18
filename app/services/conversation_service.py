@@ -12,3 +12,6 @@ class ConversationService:
         db.refresh(conversation)
 
         return conversation
+
+    def get_conversation_by_id(self, db: Session, conversation_id) -> Conversation:
+        return db.query(Conversation).filter(Conversation.id == conversation_id).first()

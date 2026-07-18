@@ -1,14 +1,21 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, status, Depends
 from app.schemas.chat import ChatRequest, AIResponse
+from sqlalchemy.orm import Session
 from app.services.chat_service import ChatService
+
+from app.dependencies import get_chat_service
+from app.core.database import get_db
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
-chat_service = ChatService()
-
 
 @router.post("/", response_model=AIResponse, status_code=status.HTTP_200_OK)
-def chat(request: ChatRequest):
-    response = chat_service.generate_response(request)
+def chat(
+    request: ChatRequest,
+    db: Session = Depends(get_db),
+    chat_service: ChatService = Depends(get_chat_service),
+):
+
+    response = chat_service.generate_response(db, request)
 
     return response

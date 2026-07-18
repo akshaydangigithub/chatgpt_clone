@@ -1,10 +1,10 @@
 # ChatGPT Clone Backend (Learning Mode)
 
-## Goal
+# Goal
 
 Build a production-style ChatGPT Clone Backend using **FastAPI + Gemini + PostgreSQL** while learning AI Engineering step by step.
 
-The objective is to understand not only _how_ to build it, but _why_ production AI backends are designed this way.
+The objective is to understand not only **how** to build it, but **why** production AI backends are designed this way.
 
 ---
 
@@ -16,7 +16,7 @@ The objective is to understand not only _how_ to build it, but _why_ production 
 - Let me implement first.
 - Review my code.
 - Suggest improvements.
-- Then continue.
+- Continue incrementally.
 - Avoid unnecessary theory.
 - Follow production-level architecture.
 - Give one task at a time.
@@ -49,7 +49,7 @@ I also already understand:
 
 Experience:
 
-- 2+ years MERN Stack Developer
+- 2+ Years MERN Stack Developer
 
 Do NOT re-teach these topics.
 
@@ -69,10 +69,10 @@ Backend
 
 Development
 
-- Postman
 - Swagger
+- Postman
 
-Frontend (later)
+Frontend (Later)
 
 - React
 
@@ -82,8 +82,8 @@ Frontend (later)
 
 ```text
 chatgpt_clone/
-│
-├── app/
+
+├── app
 │   ├── api/
 │   │   └── routes/
 │   │       ├── chat.py
@@ -98,19 +98,23 @@ chatgpt_clone/
 │   │   └── message.py
 │   │
 │   ├── schemas/
-│   │   ├── chat.py
-│   │   └── conversation.py
 │   │
 │   ├── services/
 │   │   ├── chat_service.py
 │   │   ├── conversation_service.py
 │   │   └── message_service.py
 │   │
+│   ├── exceptions/
+│   │   ├── conversation.py
+│   │   └── handlers.py
+│   │
+│   ├── dependencies.py
+│   │
 │   └── main.py
 │
 ├── alembic/
-├── requirements.txt
 ├── README.md
+├── requirements.txt
 └── .gitignore
 ```
 
@@ -118,20 +122,20 @@ chatgpt_clone/
 
 # Completed
 
-## 1. Project Setup
+## Project Setup
 
 Completed
 
 - Virtual Environment
-- FastAPI project structure
-- Environment configuration
+- FastAPI Setup
+- Configuration
 - README
-- requirements.txt
 - .gitignore
+- requirements.txt
 
 ---
 
-# 2. Configuration
+## Configuration
 
 Completed
 
@@ -143,89 +147,23 @@ Completed
 
 ---
 
-# 3. Basic Chat API
+## Database
 
 Completed
 
-- ChatRequest
-- AIResponse
-- POST /chat
-- Gemini integration
-- Swagger testing
-
----
-
-# 4. Structured Output
-
-Implemented Gemini Structured Output.
-
-Schema:
-
-```python
-class AIResponse(BaseModel):
-    answer: str
-    category: str
-    confidence: float
-```
-
-Gemini configuration:
-
-```python
-config=types.GenerateContentConfig(
-    response_mime_type="application/json",
-    response_schema=AIResponse,
-)
-```
-
-Learned
-
-- response.text
-- response.parsed
-
-Only `ai_response.answer` is stored inside conversation history.
-
----
-
-# 5. Initial In-Memory Conversation History
-
-Initially implemented
-
-```python
-self.conversations = {}
-```
-
-Conversation history was stored in RAM.
-
-Each conversation was isolated using `conversation_id`.
-
-This implementation worked but had limitations.
-
-Problems
-
-- Lost after server restart
-- Not scalable
-- Multiple workers had different histories
-- Not production ready
-
----
-
-# 6. PostgreSQL Integration
-
-Completed
-
-- Database created
-- SQLAlchemy configured
-- Alembic configured
-- Database dependency (`get_db`)
+- PostgreSQL
+- SQLAlchemy
+- Alembic
 - Engine
 - SessionLocal
 - Declarative Base
+- get_db()
 
 ---
 
-# 7. Database Models
+## Models
 
-## Conversation Model
+### Conversation
 
 Completed
 
@@ -237,16 +175,13 @@ Fields
 
 Relationship
 
-```text
 Conversation
-      │
-      ▼
+↓
 Messages
-```
 
 ---
 
-## Message Model
+### Message
 
 Completed
 
@@ -260,174 +195,140 @@ Fields
 
 Foreign Key
 
-```
 conversation_id -> conversations.id
-```
 
-Cascade delete configured.
+Cascade Delete Configured
 
 ---
 
-# 8. Conversation API
+## Conversation API
 
 Completed
 
-Created
-
-```
 POST /conversations
-```
 
-Implemented
+ConversationService
+
+- create_conversation()
 
 ConversationResponse
 
-```python
-id
-title
-created_at
-```
-
-ConversationService
-
-```python
-create_conversation(db)
-```
-
-Router
-
-- Uses Depends(get_db)
-- Returns ConversationResponse
-- Returns HTTP 201
-
----
-
-# 9. Service Layer
-
-Current services
-
-```
-ConversationService
-MessageService
-ChatService
-```
-
----
-
-## ConversationService
-
-Current responsibility
-
-- Create Conversation
-
-Current implementation
-
-```python
-create_conversation(db)
-```
+- id
+- title
+- created_at
 
 ---
 
 ## MessageService
 
-Created to follow Single Responsibility Principle.
+Completed
 
-Current methods
+Methods
 
-```python
-save_message(...)
-```
+- save_message()
+- get_conversation_messages()
 
-and
+Responsibilities
 
-```python
-get_conversation_messages(...)
-```
-
-save_message
-
-- Creates Message
-- Adds to session
-- Commit
-- Refresh
-- Returns Message
-
-get_conversation_messages
-
-- Filters by conversation_id
-- Orders by created_at ASC
-- Returns list[Message]
+- Save Messages
+- Load Conversation History
 
 ---
 
-# 10. ChatService Refactor
+## Chat API
 
-The biggest architectural change completed.
+Completed
 
-Old architecture
+POST /chat
 
-```text
-Chat
-   │
-   ▼
-self.conversations
-   │
-   ▼
-Gemini
+Gemini Structured Output
+
+Schema
+
+```python
+class AIResponse(BaseModel):
+    answer: str
+    category: str
+    confidence: float
 ```
 
-New architecture
+Gemini Config
 
-```text
-Chat
-   │
-   ▼
-PostgreSQL
-   │
-   ▼
-Gemini
+```python
+config=types.GenerateContentConfig(
+    response_mime_type="application/json",
+    response_schema=AIResponse,
+)
 ```
 
-Removed
+---
+
+## Persistent Conversation History
+
+Completed
+
+Old
 
 ```python
 self.conversations = {}
 ```
 
-Injected
+Removed.
 
-```python
-MessageService()
-```
+Current Flow
 
-Updated
+User Message
 
-```python
-generate_response(
-    db,
-    request,
-)
-```
+↓
+
+Save To PostgreSQL
+
+↓
+
+Load Conversation Messages
+
+↓
+
+Build Gemini History
+
+↓
+
+Gemini
+
+↓
+
+Save Assistant Message
+
+↓
+
+Return AIResponse
+
+Conversation history is now rebuilt from PostgreSQL every request.
+
+No in-memory history exists anymore.
 
 ---
 
-# 11. Building Gemini History
+## ChatService
 
-Created private helper
+Completed
 
-```python
-_build_history(
-    messages,
-)
-```
-
-Input
+Private Helper
 
 ```python
-list[Message]
+_build_history(messages)
 ```
 
-Output
+Purpose
+
+Converts
+
+```text
+role
+content
+```
+
+into Gemini format
 
 ```python
 [
@@ -442,111 +343,242 @@ Output
 ]
 ```
 
-Purpose
-
-Keep Gemini-specific formatting inside ChatService.
-
-Database remains independent of Gemini.
+Database remains Gemini-independent.
 
 ---
 
-# 12. Persistent Chat Flow
+# New Progress (Current Session)
 
-Current flow
+## 1. Conversation Validation
 
-```text
-POST /chat
-        │
-        ▼
-Save User Message
-        │
-        ▼
-Load Messages
-        │
-        ▼
-Build Gemini History
-        │
-        ▼
-Gemini API
-        │
-        ▼
-Receive AIResponse
-        │
-        ▼
-Save Assistant Message
-        │
-        ▼
-Return AIResponse
-```
+Completed
 
-Current ChatService flow
+Added
 
 ```python
-save_message(user)
-
-↓
-
-get_conversation_messages()
-
-↓
-
-_build_history()
-
-↓
-
-Gemini.generate_content()
-
-↓
-
-response.parsed
-
-↓
-
-save_message(model)
-
-↓
-
-return AIResponse
+ConversationService.get_conversation_by_id(
+    db,
+    conversation_id,
+)
 ```
 
-Conversation history is now completely reconstructed from PostgreSQL.
-
-Server restart no longer loses history.
-
----
-
-# Current Architecture
+Flow
 
 ```text
-Client
-    │
-    ▼
-FastAPI Route
-    │
-    ▼
-ChatService
-    │
-    ├───────────────┐
-    ▼               ▼
-MessageService   Gemini API
-    │
-    ▼
-PostgreSQL
+Receive Request
+        │
+        ▼
+Validate Conversation
+        │
+ ┌──────┴──────┐
+ │             │
+ ▼             ▼
+Exists?     Not Found
+ │             │
+ ▼             ▼
+Continue   Raise Exception
 ```
 
-No in-memory history exists anymore.
+Purpose
+
+Avoid foreign key errors before saving messages.
 
 ---
 
-# Important Design Decisions Learned
+## 2. Custom Exceptions
+
+Completed
+
+Created
+
+```text
+app/exceptions/conversation.py
+```
+
+Implemented
+
+```python
+class ConversationNotFoundError(Exception):
+    ...
+```
+
+Purpose
+
+Business layer no longer raises HTTPException.
+
+Instead
+
+```python
+raise ConversationNotFoundError(conversation_id)
+```
+
+---
+
+## 3. Global Exception Handlers
+
+Completed
+
+Created
+
+```text
+app/exceptions/handlers.py
+```
+
+Registered
+
+- ConversationNotFoundError → HTTP 404
+- Exception → HTTP 500
+
+Current Pattern
+
+```text
+ChatService
+      │
+      ▼
+Business Exception
+      │
+      ▼
+Global Exception Handler
+      │
+      ▼
+HTTP Response
+```
+
+Learned
+
+- FastAPI automatically invokes handlers registered with
+
+```python
+@app.exception_handler(...)
+```
+
+- We never call handlers manually.
+
+---
+
+## 4. Removed HTTPException From Services
+
+Completed
+
+Old
+
+```python
+try:
+    ...
+except Exception:
+    raise HTTPException(...)
+```
+
+Removed.
+
+Current
+
+Services simply raise business exceptions.
+
+FastAPI handles HTTP conversion.
+
+This keeps the service layer independent of the web framework.
+
+---
+
+## 5. Dependency Injection (Manual)
+
+Learned
+
+Old
+
+```python
+self.message_service = MessageService()
+```
+
+New
+
+```python
+class ChatService:
+    def __init__(
+        self,
+        message_service,
+        conversation_service,
+    ):
+        ...
+```
+
+Dependencies are injected instead of being created internally.
+
+Learned Constructor Injection.
+
+---
+
+## 6. FastAPI Dependency Injection
+
+Completed
+
+Created
+
+```text
+app/dependencies.py
+```
+
+Implemented
+
+```python
+get_message_service()
+
+get_conversation_service()
+
+get_chat_service()
+```
+
+Current Pattern
+
+```python
+chat_service: ChatService = Depends(get_chat_service)
+```
+
+Learned
+
+Provider Functions
+
+Dependency Graph
+
+Depends()
+
+FastAPI automatically resolves nested dependencies.
+
+---
+
+# Current Dependency Graph
+
+```text
+Request
+   │
+   ├──────────────┐
+   ▼              ▼
+get_db()   get_chat_service()
+                  │
+      ┌───────────┴───────────┐
+      ▼                       ▼
+get_message_service()   get_conversation_service()
+      │                       │
+      ▼                       ▼
+ MessageService      ConversationService
+                  │
+                  ▼
+             ChatService
+```
+
+---
+
+# Important Design Principles Learned
 
 ## Thin Routes
 
-Routes should
+Routes should only
 
-- Validate request
-- Call service
-- Return response
+- Validate Request
+- Resolve Dependencies
+- Call Service
+- Return Response
 
 No business logic.
 
@@ -562,27 +594,27 @@ Business logic belongs inside services.
 
 ConversationService
 
-Only conversation operations.
+- Conversation operations only
 
 MessageService
 
-Only message operations.
+- Message operations only
 
 ChatService
 
-Coordinates
-
-- Database
-- MessageService
-- Gemini
+- Coordinates
+  - Database
+  - Gemini
+  - MessageService
+  - ConversationService
 
 ---
 
-## Database is Source of Truth
+## Database Is Source Of Truth
 
-Gemini never stores history.
+Gemini never stores conversation history.
 
-History is reconstructed every request from PostgreSQL.
+History is rebuilt every request from PostgreSQL.
 
 ---
 
@@ -590,164 +622,164 @@ History is reconstructed every request from PostgreSQL.
 
 Database stores
 
-```text
-role
-content
-```
+- role
+- content
 
 NOT Gemini JSON.
 
-Gemini format is generated only inside
+Gemini-specific formatting exists only inside
 
 ```python
 _build_history()
 ```
 
-This allows switching AI providers later.
+This allows changing AI providers later.
 
 ---
 
-# Known Issues (To Improve Later)
+## Dependency Injection
 
-Current ChatService still catches
+Current
 
-```python
-except Exception:
-    raise HTTPException(...)
-```
+- Constructor Injection
+- Provider Functions
+- FastAPI Depends()
 
-Eventually replace with
+Understood why dependency injection improves
 
-- Custom Exceptions
-- Global Exception Handlers
+- Testability
+- Flexibility
+- Loose Coupling
+- Maintainability
 
 ---
 
-Current MessageService commits every operation.
+## Exception Handling
 
-Eventually move transaction management to ChatService.
+Current Pattern
 
-Current flow
+Business Layer
 
+↓
+
+Custom Exception
+
+↓
+
+Global Exception Handler
+
+↓
+
+HTTP Response
+
+No HTTPException inside services.
+
+---
+
+# Current Architecture
+
+```text
+Client
+   │
+   ▼
+FastAPI Route
+   │
+   ▼
+ChatService
+   │
+   ├──────────────┐
+   ▼              ▼
+MessageService  ConversationService
+   │
+   ▼
+PostgreSQL
+
+ChatService
+      │
+      ▼
+Gemini API
 ```
-commit
-↓
 
-Gemini
-
-↓
-
-commit
-```
-
-Future
-
-```
-Save User
-↓
-
-Gemini
-↓
-
-Save Assistant
-↓
-
-Single Commit
-```
+Dependencies are injected using FastAPI.
 
 ---
 
 # Immediate Next Step
 
-Conversation validation.
+Inject the Gemini client using Dependency Injection.
 
-Before saving messages, ChatService should verify the conversation exists.
-
-Current problem
-
-If a random UUID is sent
-
-```
-POST /chat
-```
-
-Database raises a foreign key error.
-
-Desired flow
-
-```text
-Receive Request
-        │
-        ▼
-Find Conversation
-        │
- ┌──────┴──────┐
- │             │
-Exists?      Not Found
- │             │
- ▼             ▼
-Continue     Return 404
-```
-
-Implement
+Current
 
 ```python
-ConversationService.get_conversation_by_id(
-    db,
-    conversation_id,
-)
+self.client = genai.Client(...)
 ```
 
-Then inside ChatService
+Problem
+
+ChatService still creates one dependency itself.
+
+Next Refactor
+
+Create provider
 
 ```python
-conversation = conversation_service.get_conversation_by_id(...)
-
-if not conversation:
-    raise ConversationNotFoundError
+def get_genai_client():
+    return genai.Client(
+        api_key=settings.GEMINI_API_KEY,
+    )
 ```
 
-Initially it may raise HTTPException(404).
+Update ChatService
 
-Later replace with custom exceptions.
+```python
+class ChatService:
+    def __init__(
+        self,
+        client,
+        message_service,
+        conversation_service,
+    ):
+        self.client = client
+```
+
+Update
+
+```python
+get_chat_service()
+```
+
+to inject
+
+```python
+client: genai.Client = Depends(get_genai_client)
+```
+
+Goal
+
+ChatService should create **zero dependencies** itself.
+
+Everything should be injected.
 
 ---
 
 # Future Roadmap
 
-## Conversation APIs
-
-- GET /conversations
-- GET /conversations/{id}
-- DELETE /conversations/{id}
-- PATCH conversation title
-
----
-
-## Error Handling
-
-- Remove HTTPException from services
-- Custom Exceptions
-- Global Exception Handlers
-- Database rollback
-- Gemini error handling
-
----
-
-## Production Improvements
+After DI
 
 - Logging
-- Proper transaction management
-- Dependency Injection
+- Proper Transaction Management
+- Unit Testing
+- Repository Pattern (if required)
+- Context Window Trimming
+- Conversation Summarization
+- Streaming Responses
+- Authentication
+- User-owned Conversations
 - Rate Limiting
 - Pagination
-- Context window trimming
-- Conversation summarization
-- Streaming responses
-- Authentication
-- Associate conversations with users
-- User-owned conversations
-- React frontend
+- Redis Caching
+- Background Tasks
+- React Frontend
 
 ---
 
@@ -755,35 +787,28 @@ Later replace with custom exceptions.
 
 Assume everything above is already completed.
 
-Do NOT
+Do NOT explain
 
-- Restart project
-- Explain Python
-- Explain FastAPI
-- Explain SQLAlchemy
-- Explain PostgreSQL
-- Explain LLM basics
-- Explain Structured Output basics
+- Python
+- FastAPI
+- SQLAlchemy
+- Alembic
+- PostgreSQL
+- LLM Basics
+- Dependency Injection Basics
+- Exception Handling Basics
 
 Continue directly from
 
 ## Next Task
 
-Implement conversation validation before chat execution.
+Inject the Gemini Client using FastAPI Dependency Injection.
 
-Order of work
+Teaching Style
 
-1. Add `get_conversation_by_id()` to `ConversationService`.
-2. Validate `conversation_id` inside `ChatService`.
-3. Return `404` when conversation doesn't exist.
-4. Refactor to custom exceptions.
-5. Add global exception handlers.
-
-Teaching style
-
-- Short explanations.
 - One task at a time.
 - Let me code first.
 - Review my implementation.
-- Suggest improvements.
-- Continue incrementally with production best practices.
+- Explain only what is necessary.
+- Focus on production-level architecture.
+- Continue incrementally.
