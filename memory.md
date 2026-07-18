@@ -57,7 +57,7 @@ Do NOT re-teach these topics.
 
 # Tech Stack
 
-Backend
+## Backend
 
 - FastAPI
 - Gemini (`google-genai`)
@@ -67,12 +67,12 @@ Backend
 - Pydantic v2
 - pydantic-settings
 
-Development
+## Development
 
 - Swagger
 - Postman
 
-Frontend (Later)
+## Frontend (Later)
 
 - React
 
@@ -81,25 +81,30 @@ Frontend (Later)
 # Current Architecture
 
 ```text
-Client
-   │
-   ▼
-FastAPI Route
-   │
-   ▼
-ChatService
-   │
-   ├──────────────┐
-   ▼              ▼
-MessageService  ConversationService
-   │
-   ▼
-PostgreSQL
+                    Client
+                       │
+                       ▼
+              Request ID Middleware
+                       │
+                       ▼
+                 FastAPI Routes
+                       │
+                       ▼
+                  ChatService
+          ┌──────────┴──────────┐
+          ▼                     ▼
+ MessageService        ConversationService
+          │                     │
+          └──────────┬──────────┘
+                     ▼
+               PostgreSQL
 
-ChatService
-      │
-      ▼
-Gemini Client
+                     │
+                     ▼
+              AI Provider Layer
+                     │
+                     ▼
+                 Gemini Client
 ```
 
 Dependencies are injected using FastAPI.
@@ -176,8 +181,6 @@ Completed
 - create_conversation()
 - get_conversation_by_id()
 
----
-
 ### MessageService
 
 Completed
@@ -185,11 +188,7 @@ Completed
 - save_message()
 - get_conversation_messages()
 
----
-
 ### ChatService
-
-Completed
 
 Responsibilities
 
@@ -212,11 +211,9 @@ Database remains independent of Gemini format.
 
 ---
 
-## Conversation History
+# Conversation History
 
-Completed
-
-Old in-memory history
+Old implementation
 
 ```python
 self.conversations = {}
@@ -248,19 +245,17 @@ Save Assistant Message
 Return Response
 ```
 
-PostgreSQL is now the source of truth.
+PostgreSQL is the source of truth.
 
 ---
 
 # Dependency Injection
 
-## Completed
+Completed
 
-Constructor Injection
-
-FastAPI Provider Functions
-
-Depends()
+- Constructor Injection
+- Provider Functions
+- FastAPI Depends()
 
 Current dependency graph
 
@@ -270,80 +265,28 @@ Request
    ├──────────────┐
    ▼              ▼
 get_db()   get_chat_service()
-                  │
-        ┌─────────┴─────────┐
-        ▼                   ▼
-get_message_service()  get_conversation_service()
-        │                   │
-        ▼                   ▼
- MessageService     ConversationService
-                  │
-                  ▼
-           ChatService
+                 │
+        ┌────────┴────────┐
+        ▼                 ▼
+MessageService   ConversationService
+        │                 │
+        └────────┬────────┘
+                 ▼
+            ChatService
 ```
 
 ---
 
-# New Progress (Latest Session)
+# Gemini Dependency Injection
 
-## 1. Gemini Client Dependency Injection
+Completed
 
-Completed.
+- Shared Gemini Client (Singleton)
+- Injected Model Name
+- ChatService no longer imports settings
+- Gemini Client created through provider function
 
-Previously
-
-```python
-self.client = genai.Client(...)
-```
-
-Now
-
-```python
-def get_genai_client():
-    ...
-```
-
-The Gemini client is injected through FastAPI instead of being created inside ChatService.
-
----
-
-## 2. Model Configuration Injection
-
-Completed.
-
-Previously
-
-```python
-self.model = settings.GEMINI_MODEL
-```
-
-Now
-
-The model name is passed through constructor injection.
-
-ChatService no longer imports `settings`.
-
-Configuration is treated as a dependency.
-
----
-
-## 3. Shared Gemini Client
-
-Completed.
-
-Instead of creating
-
-```python
-genai.Client(...)
-```
-
-for every request,
-
-a single shared client instance is reused.
-
-Learned:
-
-Different dependency lifetimes.
+Dependency lifetimes
 
 | Dependency          | Lifetime    |
 | ------------------- | ----------- |
@@ -355,93 +298,33 @@ Different dependency lifetimes.
 
 ---
 
-## 4. AI Exception Architecture
+# AI Exception Architecture
 
-Completed.
+Completed
 
 Created
 
-```text
+```
 app/exceptions/ai.py
 ```
 
 Contains
 
-```python
-AIServiceError
-
-AIRateLimitError
-
-AITimeoutError
-
-AIInvalidResponseError
-
-AIAuthenticationError
-```
-
-Purpose
-
-Business layer no longer depends on Gemini-specific exceptions.
-
-The application now uses provider-independent AI exceptions.
-
----
-
-## 5. ChatService Error Translation
-
-Completed.
-
-Gemini calls are wrapped.
-
-Current pattern
-
-```python
-try:
-    ...
-except Exception as e:
-    raise AIServiceError() from e
-```
-
-Future
-
-Specific Gemini SDK exceptions will be mapped into
-
+- AIServiceError
 - AIRateLimitError
 - AITimeoutError
 - AIAuthenticationError
 - AIInvalidResponseError
 
-instead of generic Exception.
+Business layer depends only on application exceptions.
+
+No Gemini SDK exceptions leak outside ChatService.
 
 ---
 
-## 6. Response Validation
+# Global Exception Handling
 
-Completed.
-
-After parsing
-
-```python
-response.parsed
-```
-
-The response should be validated.
-
-If parsing fails
-
-```python
-raise AIInvalidResponseError()
-```
-
-instead of continuing.
-
----
-
-## 7. Global Exception Handling
-
-Architecture completed.
-
-Flow
+Architecture
 
 ```text
 Gemini SDK Exception
@@ -459,11 +342,260 @@ Global Exception Handler
 HTTP Response
 ```
 
-Services never return HTTPException.
+Services never raise HTTPException.
 
-Only business exceptions.
+---
 
-Handlers convert them into HTTP responses.
+# Transaction Management (NEW)
+
+## Completed
+
+Learned:
+
+- ACID
+- Atomicity
+- Transaction Boundaries
+- Unit of Work
+- commit()
+- rollback()
+- flush()
+- autoflush
+
+### Major Refactor
+
+Previously
+
+```text
+MessageService
+    commit()
+
+ConversationService
+    commit()
+```
+
+Now
+
+```text
+MessageService
+    add()
+
+ConversationService
+    add()
+
+ChatService
+    commit()
+```
+
+Services no longer own database transactions.
+
+ChatService is now the Unit of Work.
+
+---
+
+## Current Transaction Flow
+
+```text
+Start Transaction
+
+↓
+
+Save User Message
+
+↓
+
+Load Conversation
+
+↓
+
+Call Gemini
+
+↓
+
+Validate Response
+
+↓
+
+Save Assistant Message
+
+↓
+
+Commit
+
+↓
+
+Return Response
+```
+
+If anything fails
+
+```text
+Rollback
+
+↓
+
+Re-raise Exception
+```
+
+---
+
+## Important Concepts Learned
+
+### add()
+
+Marks an object as pending.
+
+Does NOT write to the database.
+
+---
+
+### flush()
+
+Executes SQL statements.
+
+INSERT is sent to PostgreSQL.
+
+Changes are still inside the transaction.
+
+Rollback removes them.
+
+---
+
+### commit()
+
+Makes the transaction permanent.
+
+Visible to every other database session.
+
+Rollback is no longer possible.
+
+---
+
+### rollback()
+
+Returns the transaction to its previous state.
+
+Must always be called if a transaction fails.
+
+---
+
+### Autoflush
+
+Before executing queries SQLAlchemy automatically flushes pending changes.
+
+Therefore
+
+```python
+db.add(user)
+
+db.query(User).all()
+```
+
+returns the newly added user even before commit.
+
+---
+
+# Production Trade-offs Learned
+
+Compared
+
+## One Long Transaction
+
+Pros
+
+- Atomic
+- Simple
+
+Cons
+
+- Long-running transactions
+- Holds database resources
+
+---
+
+## Two Transactions
+
+Pros
+
+- Better scalability
+- Short transactions
+
+Cons
+
+- User message may exist without assistant reply
+
+---
+
+Learned about
+
+- Eventual Consistency
+- Message Status Pattern
+- Why ChatGPT-like systems usually do not keep transactions open during LLM inference.
+
+---
+
+# Logging
+
+Completed
+
+Created
+
+```
+app/core/logging.py
+```
+
+Using Python logging instead of print().
+
+Current logs include
+
+- Timestamp
+- Log Level
+- Logger Name
+- Message
+
+Using
+
+```python
+logger = logging.getLogger(__name__)
+```
+
+instead of print().
+
+---
+
+# Request ID Middleware
+
+Completed
+
+Created
+
+```
+app/middleware/request_id.py
+```
+
+Middleware
+
+- Generates UUID
+- Stores request.state.request_id
+- Calls next middleware / route
+- Adds
+
+```
+X-Request-ID
+```
+
+response header.
+
+Middleware registered inside
+
+```
+main.py
+```
+
+using
+
+```python
+app.middleware("http")(request_id_middleware)
+```
 
 ---
 
@@ -473,10 +605,10 @@ Handlers convert them into HTTP responses.
 
 Routes only
 
-- Validate requests
-- Resolve dependencies
-- Call services
-- Return responses
+- Validate Request
+- Resolve Dependencies
+- Call Services
+- Return Response
 
 No business logic.
 
@@ -490,85 +622,43 @@ Business logic belongs inside services.
 
 ## Dependency Injection
 
-Current project uses
+Using
 
 - Constructor Injection
 - Provider Functions
 - FastAPI Depends()
 
-Learned
-
-- Loose Coupling
-- Testability
-- Maintainability
-- Flexibility
-
 ---
 
-## Dependency Lifetimes
+## Unit of Work
 
-Not every dependency has the same lifetime.
+Only one component owns the database transaction.
 
-Examples
+Current owner
 
-Database Session
-
-- Request Scoped
-
-Gemini Client
-
-- Singleton
-
-Understanding dependency lifetime is part of production backend design.
-
----
-
-## Exception Hierarchy
-
-Current hierarchy
-
-```text
-Exception
-      │
-      ▼
-AIServiceError
-      │
-      ├── AIRateLimitError
-      ├── AITimeoutError
-      ├── AIAuthenticationError
-      └── AIInvalidResponseError
 ```
-
-Business code depends on application exceptions instead of SDK exceptions.
+ChatService
+```
 
 ---
 
 ## Provider Independence
 
-The application should never depend directly on Gemini.
+Business layer should never depend directly on Gemini.
 
-Today
+Future providers
 
-Gemini
-
-Tomorrow
-
-- Gemini
 - OpenAI
 - Claude
 - Ollama
 
-Only the provider adapter should change.
-
-Business layer remains unchanged.
+should require minimal changes.
 
 ---
 
 ## Database Is Source Of Truth
 
-Gemini never stores history.
-
-History is rebuilt from PostgreSQL every request.
+Conversation history is rebuilt from PostgreSQL every request.
 
 ---
 
@@ -579,15 +669,13 @@ Database stores
 - role
 - content
 
-Not Gemini JSON.
+not Gemini JSON.
 
 Gemini formatting exists only inside
 
 ```python
 _build_history()
 ```
-
-Changing providers should require minimal changes.
 
 ---
 
@@ -608,9 +696,13 @@ Completed
 - Shared Gemini Client
 - Injected Model Configuration
 - Global Exception Handling
-- Business Exceptions
 - AI Exception Hierarchy
 - Structured Gemini Output
+- Unit of Work
+- Transaction Management
+- commit / rollback ownership
+- Logging
+- Request ID Middleware
 
 Architecture is now clean, modular and production-oriented.
 
@@ -618,50 +710,54 @@ Architecture is now clean, modular and production-oriented.
 
 # Immediate Next Step
 
-## Transaction Management (Unit of Work)
+## Structured Logging
 
-Current concern
+Implement production-grade logging.
 
-```python
-save user message
+Topics
 
-↓
+- Log Formatter
+- JSON Logs
+- Request Context
+- contextvars
+- Automatic Request ID Injection
+- Structured Log Records
 
-call Gemini
+Goal
 
-↓
+Instead of
 
-save assistant message
+```
+INFO Calling Gemini
 ```
 
-Question
+produce
 
-Who owns the database transaction?
+```json
+{
+  "timestamp": "...",
+  "level": "INFO",
+  "request_id": "...",
+  "conversation_id": "...",
+  "service": "ChatService",
+  "message": "Calling Gemini"
+}
+```
 
-If saving the assistant message fails,
-
-should the user message remain saved?
-
-Need to learn
-
-- Database Transactions
-- commit()
-- rollback()
-- Unit of Work
-- Transaction Boundaries
-- Atomic Operations
-
-This is the next production-level architectural improvement.
+without manually passing request_id everywhere.
 
 ---
 
 # Future Roadmap
 
-After Transaction Management
+After Structured Logging
 
-- Structured Logging
-- Request IDs
+- contextvars
+- Request Timing Middleware
+- Automatic Exception Logging
 - Retry Logic
+- Exponential Backoff
+- Timeout Handling
 - Context Window Trimming
 - Conversation Summarization
 - Token Counting
@@ -689,27 +785,29 @@ After Transaction Management
 
 Assume everything above is already completed.
 
-Do NOT explain
+Do NOT explain again
 
 - Python
 - FastAPI
 - SQLAlchemy
 - Alembic
 - PostgreSQL
-- LLM Basics
-- Dependency Injection Basics
-- Exception Handling Basics
+- Dependency Injection basics
+- Transactions basics
+- Logging basics
+- LLM basics
 
-Continue directly from
+Continue directly with
 
 ## Next Task
 
-Implement **Transaction Management (Unit of Work)** for ChatService.
+Implement **Production Structured Logging using contextvars**.
 
-Teaching style
+Teaching Style
 
 - One task at a time.
 - Let me implement first.
-- Review my implementation.
+- Review my code.
 - Explain only what is necessary.
-- Continue with production-level architecture.
+- Focus on production architecture.
+- Continue as a Senior AI Engineer mentoring a Junior Developer.
