@@ -8,8 +8,6 @@ class ConversationService:
         conversation = Conversation()
 
         db.add(conversation)
-        db.commit()
-        db.refresh(conversation)
 
         return conversation
 

@@ -20,8 +20,6 @@ class MessageService:
         )
 
         db.add(message)
-        db.commit()
-        db.refresh(message)
 
         return message
 
