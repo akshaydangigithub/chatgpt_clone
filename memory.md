@@ -2,8 +2,7 @@
 
 ## Goal
 
-Build a production-style ChatGPT Clone Backend using FastAPI + Gemini
-while learning AI Engineering step by step.
+Build a production-style ChatGPT Clone Backend using FastAPI + Gemini while learning AI Engineering step by step.
 
 ---
 
@@ -22,6 +21,8 @@ while learning AI Engineering step by step.
 - Repository / Service architecture
 - Centralized configuration
 
+---
+
 ### Database
 
 - Conversation model
@@ -29,45 +30,117 @@ while learning AI Engineering step by step.
 - Relationships
 - Database migrations
 
+---
+
 ### API
 
 - Create Conversation
 - Chat Endpoint
 - Streaming Chat Endpoint
 
+### Conversation Management
+
+Implemented:
+
+- ✅ Create Conversation
+- ✅ Get Conversation by ID
+- ✅ List Conversations
+- ✅ Rename Conversation
+- ✅ Delete Conversation
+
+REST API endpoints:
+
+- `POST /conversations`
+- `GET /conversations`
+- `PATCH /conversations/{conversation_id}`
+- `DELETE /conversations/{conversation_id}`
+
+Production improvements:
+
+- Correct REST status codes
+- `204 No Content` for delete
+- Request/Response schemas
+- Transaction commits moved to Route layer
+- Empty conversation list returns `[]` instead of an error
+- Business errors handled through custom exceptions
+
+---
+
 ### Services
 
 #### ConversationService
 
+Implemented:
+
 - Create conversation
-- Get conversation by ID
+- Get conversation
+- List conversations
+- Rename conversation
+- Delete conversation
+- Generate title (heuristic)
+
+Current responsibility:
+
+- All conversation business logic
+- No transaction ownership
+- Routes/Orchestrators perform commit()
+
+---
 
 #### MessageService
 
 - Save messages
 - Load conversation history
 
+---
+
 #### ChatService
+
+Implemented:
 
 - Validate conversation
 - Save user message
-- Load conversation history
+- Load history
 - Build provider history
-- Call AI Provider
+- Call AI provider
 - Save assistant response
+- Generate conversation title
 - Transaction management
 - Rollback on failure
 - Streaming orchestration
+
+Refactoring completed:
+
+- Removed duplicated conversation title generation logic.
+- Introduced helper/private workflow to avoid duplicate code.
+- Conversation title generated only once after successful AI response.
+
+---
 
 ### AI Provider Pattern
 
 Implemented:
 
-ChatService → AIProvider → FallbackProvider → GeminiProvider
+```
+ChatService
+      │
+      ▼
+AIProvider
+      │
+      ▼
+FallbackProvider
+      │
+      ▼
+GeminiProvider
+```
 
-Business logic is provider-agnostic.
+Business logic remains provider-independent.
+
+---
 
 ### GeminiProvider
+
+Implemented:
 
 - Shared Gemini client
 - Structured JSON output
@@ -75,47 +148,121 @@ Business logic is provider-agnostic.
 - Retry (Tenacity)
 - Circuit Breaker
 - Exception Mapping
-- Streaming support
+- Native async streaming
+- Plain text chunk streaming
 
-Important architecture rule:
+Provider Rule:
 
-- GeminiProvider ONLY returns AI text.
-- No HTTP/SSE formatting inside the provider.
-- HTTP formatting belongs to ChatService.
+- Provider returns plain text only.
+- No SSE formatting.
+- No HTTP knowledge.
+
+---
 
 ### Streaming
 
-Implemented: - StreamingResponse - Python generators - Incremental token
-streaming - Response persistence - Transaction handling after stream
-completion
+Implemented:
+
+- Async StreamingResponse
+- Async generators
+- Native Gemini async streaming
+- Producer task
+- Heartbeat task
+- asyncio.Queue
+- Transaction-safe persistence
+- Response persistence after stream completion
+
+Current architecture:
+
+```
+GeminiProvider
+        │
+        ▼
+Producer Task
+        │
+        ▼
+asyncio.Queue
+        ▲
+Heartbeat Task
+        │
+        ▼
+ChatService
+        │
+        ▼
+StreamingResponse
+```
+
+---
+
+### Server-Sent Events (SSE)
+
+Implemented:
+
+- text/event-stream
+- Generic SSE formatter
+- Message events
+- Heartbeat events
+- End events
+- Error events
+- Proper SSE headers
+
+Utility:
+
+```
+app/utils/sse.py
+```
+
+Contains:
+
+- format_message()
+- format_heartbeat()
+- format_done()
+- format_error()
+
+---
 
 ### Retry
 
 - Tenacity
-- Exponential backoff
-- Retry on recoverable errors
-- No retry on authentication/validation errors
+- Exponential Backoff
+- Retry only recoverable errors
+
+---
 
 ### Circuit Breaker
+
+Implemented:
 
 - CLOSED
 - OPEN
 - HALF_OPEN
 
+---
+
 ### Logging
 
-- Rich logging
-- Request ID
+Implemented:
+
+- Rich Logging
 - ContextVars
+- Request ID
 - Uvicorn integration
+
+---
 
 ### Middleware
 
+Implemented:
+
 - Request ID middleware
-- Response header
+- Response headers
 - Context cleanup
 
+---
+
 ### Error Handling
+
+Implemented:
 
 - AIServiceError
 - AIRateLimitError
@@ -125,91 +272,40 @@ completion
 - AICircuitOpenError
 - ConversationNotFoundError
 
-### Dependency Injection
-
-Fully injected: - Database session - Gemini client - Circuit breaker -
-GeminiProvider - FallbackProvider - Services
-
 ---
 
-# ✅ NEW: Production-style Server-Sent Events (SSE)
+### Dependency Injection
 
-Implemented:
+Fully injected:
 
-- text/event-stream responses
-- Proper SSE headers
-- Generic SSE formatter
-- Structured JSON events
-- Message events
-- End events
-- Error events
-- Clean separation of concerns
-
-Current architecture:
-
-FastAPI Route → StreamingResponse → ChatService → SSE Formatter →
-AIProvider → GeminiProvider
-
-## SSE Utility
-
-app/utils/sse.py
-
-Contains:
-
-- format_sse(event, data)
-- format_message(text)
-- format_end()
-- format_error(message)
-
-Example output:
-
-event: message data: {"text":"Hello"}
-
-event: end data: {}
-
-## ChatService responsibilities
-
-During streaming:
-
-- Receive plain text from provider
-- Convert text into SSE events
-- Yield formatted events
-- Persist final response
-- Emit end event
-- Emit error event when failures occur
-
-## GeminiProvider responsibilities
-
-Provider only yields:
-
-- Plain text chunks
-
-It must NOT:
-
-- Know about HTTP
-- Know about SSE
-- Format responses
-
-This separation keeps the provider reusable for WebSockets, CLI, gRPC,
-or any future transport.
+- Database
+- Gemini Client
+- Circuit Breaker
+- GeminiProvider
+- FallbackProvider
+- Services
 
 ---
 
 # Architecture Principles Learned
 
 - Layered Architecture
-- Repository Pattern
 - Service Layer
 - Dependency Injection
 - Provider Pattern
 - Provider Fallback
 - Unit of Work
 - Transaction Management
-- Exception Mapping
 - Retry Pattern
 - Circuit Breaker
+- Exception Mapping
 - Streaming Architecture
-- Server-Sent Events (SSE)
+- Async Programming
+- Async Generators
+- asyncio.Queue
+- Producer-Consumer Pattern
+- Heartbeat Pattern
+- Server-Sent Events
 - Separation of Concerns
 - Business Orchestration
 
@@ -218,31 +314,43 @@ or any future transport.
 # Production Concepts Learned
 
 - Retry
-- Circuit Breaker
 - Fail Fast
+- Circuit Breaker
 - Exponential Backoff
 - Structured Logging
 - Request Correlation
-- StreamingResponse
-- Python Generators
-- Iterator Pattern
-- Token Streaming
+- Async Streaming
+- Async Iterators
+- Async Generators
+- asyncio.Queue
+- Producer/Consumer
+- Heartbeat
 - SSE Protocol
-- text/event-stream
-- JSON Event Streaming
+- Transaction-safe Streaming
 
 ---
 
 # Current Streaming Flow
 
-Browser → StreamingResponse → ChatService.stream_response() →
-format_message() → GeminiProvider.stream_response() → Gemini API
-
-Events returned:
-
-- message
-- end
-- error
+```
+Browser
+    │
+    ▼
+StreamingResponse
+    │
+    ▼
+ChatService
+    │
+    ├── Producer Task
+    ├── Heartbeat Task
+    └── Queue Consumer
+    │
+    ▼
+GeminiProvider
+    │
+    ▼
+Gemini API
+```
 
 ---
 
@@ -250,46 +358,39 @@ Events returned:
 
 Continue in this order.
 
-## 1. Improve SSE
+## 1. Improve Conversation Management
 
-Still remaining:
+Remaining:
 
-- Heartbeat events
-- Event IDs
-- Retry field
-- Multi-line data support
-- Browser EventSource
-- fetch() streaming
-- Frontend integration
-
-## 2. Conversation Features
-
-Implement:
-
-- Auto Title Generation
-- Rename Conversation
-- Delete Conversation
-- Conversation Listing
+- AI-based Title Generation
 - Pagination
 - Search
+- Recent conversations ordering
+- Soft Delete (optional)
+- Archive conversations (optional)
 
-## 3. Authentication
+---
+
+## 2. Authentication
 
 Implement:
 
 - JWT
 - User model
+- User authentication
 - User conversations
 - Ownership validation
 
-## 4. Production Readiness
+---
+
+## 3. Production Readiness
 
 Implement:
 
 - Docker
 - Docker Compose
 - Environment separation
-- Health checks
+- Health Checks
 - Metrics
 - OpenTelemetry
 - Prometheus
@@ -308,8 +409,8 @@ Rules:
 - Explain why before coding.
 - Let me implement first.
 - Follow production architecture.
-- Compare with Node.js when useful.
-- Focus on production-quality design rather than shortcuts.
+- Compare with Node.js whenever useful.
+- Focus on production-quality design instead of shortcuts.
 
 ---
 
@@ -318,7 +419,6 @@ Rules:
 The backend now supports:
 
 - Clean Layered Architecture
-- Repository Pattern
 - Service Layer
 - Dependency Injection
 - Provider Pattern
@@ -327,15 +427,22 @@ The backend now supports:
 - Exception Mapping
 - Structured Logging
 - Request Correlation
-- Streaming AI Responses
-- Production-style SSE
-- JSON SSE Events
+- Async Streaming
+- Producer/Consumer Queue
+- Heartbeat Streaming
+- Production SSE
+- Conversation CRUD
+- Auto Conversation Title (Heuristic)
 - Transaction-safe Streaming
 - Provider-independent Business Logic
 
-Next milestone:
+---
 
-1.  Complete advanced SSE features.
-2.  Build Conversation Management.
-3.  Add Authentication.
-4.  Prepare the project for production deployment.
+# Next Milestone
+
+1. AI-powered conversation title generation.
+2. Pagination.
+3. Search conversations.
+4. JWT Authentication.
+5. User ownership.
+6. Production deployment.

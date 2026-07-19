@@ -1,4 +1,5 @@
-from collections.abc import Iterator
+import asyncio
+from collections.abc import AsyncIterator
 from typing import Any
 
 import logging
@@ -13,8 +14,11 @@ from app.services.message_service import MessageService
 from app.utils.sse import (
     format_done,
     format_error,
+    format_heartbeat,
     format_message,
 )
+
+HEARTBEAT_INTERVAL_SECONDS = 15
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +91,22 @@ class ChatService:
             content=content,
         )
 
+    def _generate_conversation_title(
+        self,
+        db: Session,
+        request: ChatRequest,
+    ) -> None:
+        conversation = self.conversation_service.get_conversation_by_id(
+            db,
+            request.conversation_id,
+        )
+
+        if conversation and conversation.title is None:
+            self.conversation_service.generate_title(
+                conversation,
+                request.message,
+            )
+
     def generate_response(
         self,
         db: Session,
@@ -109,6 +129,8 @@ class ChatService:
                 ai_response.answer,
             )
 
+            self._generate_conversation_title(db, request)
+
             db.commit()
 
             logger.info(
@@ -126,25 +148,67 @@ class ChatService:
             )
             raise
 
-    def stream_response(
+    async def stream_response(
         self,
         db: Session,
         request: ChatRequest,
-    ) -> Iterator[str]:
+    ) -> AsyncIterator[str]:
 
         logger.info(
             "Streaming AI response for conversation %s",
             request.conversation_id,
         )
 
+        history = self._prepare_history(db, request)
+
+        chunks: list[str] = []
+        # Single-producer/single-consumer queue that multiplexes real AI
+        # chunks with periodic heartbeats onto one SSE stream.
+        queue: asyncio.Queue[tuple[str, Any]] = asyncio.Queue()
+
+        async def produce() -> None:
+            try:
+                async for chunk in self.provider.stream_response(history):
+                    chunks.append(chunk)
+                    await queue.put(("data", format_message(chunk)))
+            except Exception as exc:  # noqa: BLE001 - surfaced to consumer
+                await queue.put(("error", exc))
+            finally:
+                await queue.put(("done", None))
+
+        async def heartbeat() -> None:
+            while True:
+                await asyncio.sleep(HEARTBEAT_INTERVAL_SECONDS)
+                await queue.put(("heartbeat", format_heartbeat()))
+
+        producer = asyncio.create_task(produce())
+        beat = asyncio.create_task(heartbeat())
+
+        error: Exception | None = None
+
         try:
-            history = self._prepare_history(db, request)
+            while True:
+                kind, payload = await queue.get()
 
-            chunks: list[str] = []
+                if kind == "done":
+                    break
 
-            for chunk in self.provider.stream_response(history):
-                chunks.append(chunk)
-                yield format_message(chunk)
+                if kind == "error":
+                    error = payload
+                    continue
+
+                # "data" and "heartbeat" both carry a ready-to-send SSE frame.
+                yield payload
+
+            if error is not None:
+                db.rollback()
+                yield format_error(str(error))
+                logger.error(
+                    "Streaming failed for conversation %s: %s",
+                    request.conversation_id,
+                    error,
+                )
+                return
 
             self._save_assistant_message(
                 db,
@@ -154,6 +218,8 @@ class ChatService:
 
             yield format_done()
 
+            self._generate_conversation_title(db, request)
+
             db.commit()
 
             logger.info(
@@ -161,13 +227,7 @@ class ChatService:
                 request.conversation_id,
             )
 
-        except Exception as e:
-            db.rollback()
-
-            yield format_error(str(e))
-
-            logger.exception(
-                "Streaming failed for conversation %s",
-                request.conversation_id,
-            )
-            raise
+        finally:
+            beat.cancel()
+            producer.cancel()
+            await asyncio.gather(beat, producer, return_exceptions=True)

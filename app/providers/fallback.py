@@ -1,4 +1,4 @@
-from collections.abc import Iterator
+from collections.abc import AsyncIterator
 from typing import Any
 
 from app.exceptions.ai import AIServiceError
@@ -46,10 +46,10 @@ class FallbackProvider(AIProvider):
 
         raise AIServiceError(error_message)
 
-    def stream_response(
+    async def stream_response(
         self,
         history: list[dict[str, Any]],
-    ) -> Iterator[str]:
+    ) -> AsyncIterator[str]:
 
         failures: list[str] = []
 
@@ -60,7 +60,8 @@ class FallbackProvider(AIProvider):
                     provider.__class__.__name__,
                 )
 
-                yield from provider.stream_response(history)
+                async for chunk in provider.stream_response(history):
+                    yield chunk
                 return
 
             except AIServiceError as e:

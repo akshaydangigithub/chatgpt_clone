@@ -21,7 +21,7 @@ import logging
 from typing import Any
 from app.core.circuit_breaker import CircuitBreaker
 from pydantic import ValidationError
-from collections.abc import Iterator
+from collections.abc import AsyncIterator
 
 logger = logging.getLogger(__name__)
 
@@ -82,12 +82,12 @@ class GeminiProvider(AIProvider):
             logger.exception("Gemini request failed")
             raise self._map_exception(e) from e
 
-    def stream_response(
+    async def stream_response(
         self,
         history: list[dict[str, Any]],
-    ) -> Iterator[str]:
+    ) -> AsyncIterator[str]:
         """
-        Stream AI response chunks from Gemini.
+        Stream AI response chunks from Gemini using the async SDK client.
 
         Yields:
             Plain text chunks from the AI provider.
@@ -98,12 +98,12 @@ class GeminiProvider(AIProvider):
         try:
             logger.info("Calling Gemini Stream API")
 
-            stream = self.client.models.generate_content_stream(
+            stream = await self.client.aio.models.generate_content_stream(
                 model=self.model,
                 contents=history,
             )
 
-            for chunk in stream:
+            async for chunk in stream:
                 if not hasattr(chunk, "text"):
                     continue
 

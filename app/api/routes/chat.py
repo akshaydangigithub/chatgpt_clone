@@ -30,7 +30,7 @@ def chat(
 
 
 @router.post("/stream")
-def stream_chat(
+async def stream_chat(
     request: ChatRequest,
     db: Session = Depends(get_db),
     chat_service: ChatService = Depends(get_chat_service),

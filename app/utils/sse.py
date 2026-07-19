@@ -29,6 +29,17 @@ def format_done() -> str:
     )
 
 
+def format_heartbeat() -> str:
+    """
+    SSE comment line used as a keep-alive ping.
+
+    Comment lines (starting with ':') are ignored by EventSource clients
+    but keep the connection and any intermediary proxies from timing out.
+    """
+
+    return ": heartbeat\n\n"
+
+
 def format_error(message: str) -> str:
     return format_sse(
         event="error",
