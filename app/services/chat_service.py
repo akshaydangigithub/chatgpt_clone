@@ -1,30 +1,31 @@
-from google import genai
-from app.schemas.chat import ChatRequest, AIResponse
-from google.genai import types
-from app.models.message import Message
 from sqlalchemy.orm import Session
-from app.services.message_service import MessageService
-from app.services.conversation_service import ConversationService
-from app.exceptions.conversation import ConversationNotFoundError
+
 from app.exceptions.ai import (
-    AIServiceError,
+    AIAuthenticationError,
     AIInvalidResponseError,
     AIRateLimitError,
-    AIAuthenticationError,
+    AIServiceError,
     AITimeoutError,
 )
+from app.exceptions.conversation import ConversationNotFoundError
+from app.models.message import Message
+from app.providers.base import AIProvider
+from app.schemas.chat import AIResponse, ChatRequest
+from app.services.conversation_service import ConversationService
+from app.services.message_service import MessageService
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ChatService:
     def __init__(
         self,
-        client: genai.Client,
-        model: str,
+        provider: AIProvider,
         message_service: MessageService,
         conversation_service: ConversationService,
     ):
-        self.client = client
-        self.model = model
+        self.provider = provider
         self.message_service = message_service
         self.conversation_service = conversation_service
 
@@ -32,7 +33,16 @@ class ChatService:
         history = []
 
         for message in messages:
-            history.append({"role": message.role, "parts": [{"text": message.content}]})
+            history.append(
+                {
+                    "role": message.role,
+                    "parts": [
+                        {
+                            "text": message.content,
+                        }
+                    ],
+                }
+            )
 
         return history
 
@@ -42,16 +52,17 @@ class ChatService:
         request: ChatRequest,
     ) -> AIResponse:
         try:
-            # ---- Validate conversation
+
             conversation = self.conversation_service.get_conversation_by_id(
                 db,
                 request.conversation_id,
             )
 
             if conversation is None:
+                logger.info("Conversation not found")
                 raise ConversationNotFoundError(request.conversation_id)
 
-            # ---- Save user message
+            # Save user message
             self.message_service.save_message(
                 db=db,
                 conversation_id=request.conversation_id,
@@ -59,35 +70,19 @@ class ChatService:
                 content=request.message,
             )
 
-            # ---- Load history
+            # Load conversation history
             messages = self.message_service.get_conversation_messages(
-                db,
-                request.conversation_id,
+                db=db,
+                conversation_id=request.conversation_id,
             )
 
+            # Convert database messages to provider format
             history = self._build_history(messages)
 
-            # ---- Call Gemini
-            try:
-                response = self.client.models.generate_content(
-                    model=self.model,
-                    contents=history,
-                    config=types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        response_schema=AIResponse,
-                    ),
-                )
+            # Generate AI response
+            ai_response = self.provider.generate_response(history)
 
-            except Exception as e:
-                raise AIServiceError() from e
-
-            # ---- Validate AI response
-            ai_response = response.parsed
-
-            if ai_response is None:
-                raise AIInvalidResponseError()
-
-            # ---- Save assistant message
+            # Save assistant response
             self.message_service.save_message(
                 db=db,
                 conversation_id=request.conversation_id,
@@ -95,7 +90,7 @@ class ChatService:
                 content=ai_response.answer,
             )
 
-            # ---- Commit Transaction
+            # Commit transaction
             db.commit()
 
             return ai_response

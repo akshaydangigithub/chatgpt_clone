@@ -21,4 +21,6 @@ def chat(
 
     response = chat_service.generate_response(db, request)
 
+    db.commit()
+
     return response

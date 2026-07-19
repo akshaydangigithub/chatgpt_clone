@@ -7,3 +7,5 @@ sqlalchemy
 psycopg[binary]
 alembic
 psycopg2-binary==2.9.10
+tenacity==9.1.2
+rich

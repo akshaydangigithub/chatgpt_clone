@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from app.api.routes.chat import router as chat_router
+from app.api.routes.conversation import router as conversation_router
 from app.exceptions.handlers import register_exception_handlers
 from app.core.logging import setup_logging
 from app.middleware.request_id import request_id_middleware
@@ -16,6 +17,7 @@ register_exception_handlers(app)
 app.middleware("http")(request_id_middleware)
 
 app.include_router(chat_router)
+app.include_router(conversation_router)
 
 
 @app.get("/")

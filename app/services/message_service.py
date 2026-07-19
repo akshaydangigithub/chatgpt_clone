@@ -20,6 +20,7 @@ class MessageService:
         )
 
         db.add(message)
+        db.flush()
 
         return message
 

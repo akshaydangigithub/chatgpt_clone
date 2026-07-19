@@ -5,6 +5,8 @@ from app.core.database import get_db
 from app.schemas.conversation import ConversationResponse
 from app.services.conversation_service import ConversationService
 
+from app.models.conversation import Conversation
+
 router = APIRouter(
     prefix="/conversations",
     tags=["Conversations"],
@@ -20,4 +22,7 @@ conversation_service = ConversationService()
 )
 def create_conversation(db: Session = Depends(get_db)):
     conversation = conversation_service.create_conversation(db)
+
+    db.commit()
+
     return conversation

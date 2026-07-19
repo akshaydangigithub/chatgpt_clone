@@ -2,812 +2,378 @@
 
 ## Goal
 
-Build a production-style ChatGPT Clone Backend using **FastAPI + Gemini + PostgreSQL** while learning AI Engineering step by step.
-
-The objective is to understand not only **how** to build it, but **why** production AI backends are designed this way.
+Build a production-style ChatGPT Clone Backend using FastAPI + Gemini while learning AI Engineering step by step.
 
 ---
 
-# Teaching Style
+# Current Progress
 
-- Act as a Senior AI Engineer mentoring a Junior Developer.
-- Keep explanations short.
-- Explain why something is needed.
-- Let me implement first.
-- Review my code.
-- Suggest improvements.
-- Continue incrementally.
-- Avoid unnecessary theory.
-- Follow production-level architecture.
-- Give one task at a time.
-- Never dump the entire implementation unless I explicitly ask.
+## ✅ Completed
 
----
+### Project Foundation
 
-# My Background
-
-I already know:
-
-- Python
-- FastAPI
-- PostgreSQL
-- SQLAlchemy
-- Alembic
-- Pydantic
-- REST APIs
-- Environment Variables
-
-I also already understand:
-
-- LLMs
-- Tokens
-- Context Window
-- Prompt Engineering
-- System Prompts
-- Temperature
-- Structured Output
-
-Experience:
-
-- 2+ Years MERN Stack Developer
-
-Do NOT re-teach these topics.
+- FastAPI project structure
+- Environment configuration using `pydantic-settings`
+- Dependency Injection
+- PostgreSQL integration
+- SQLAlchemy ORM
+- Alembic migrations
+- Repository/Service style architecture
+- Centralized configuration
 
 ---
 
-# Tech Stack
+### Database Models
 
-## Backend
+Completed models:
 
-- FastAPI
-- Gemini (`google-genai`)
-- PostgreSQL
-- SQLAlchemy 2.x
-- Alembic
-- Pydantic v2
-- pydantic-settings
+- Conversation
+- Message
 
-## Development
-
-- Swagger
-- Postman
-
-## Frontend (Later)
-
-- React
+Implemented relationships and database migrations.
 
 ---
 
-# Current Architecture
+### API Layer
 
-```text
-                    Client
-                       │
-                       ▼
-              Request ID Middleware
-                       │
-                       ▼
-                 FastAPI Routes
-                       │
-                       ▼
-                  ChatService
-          ┌──────────┴──────────┐
-          ▼                     ▼
- MessageService        ConversationService
-          │                     │
-          └──────────┬──────────┘
-                     ▼
-               PostgreSQL
+Implemented endpoints:
 
-                     │
-                     ▼
-              AI Provider Layer
-                     │
-                     ▼
-                 Gemini Client
-```
+- Create Conversation
+- Chat Endpoint
 
-Dependencies are injected using FastAPI.
+Using:
+
+- Request/Response Schemas
+- Dependency Injection
+- Proper Response Models
 
 ---
 
-# Completed
+### Services
 
-## Project Setup
+Implemented:
 
-- Virtual Environment
-- FastAPI Setup
-- README
-- .gitignore
-- requirements.txt
-- Configuration
+#### ConversationService
 
----
+Responsible for:
 
-## Database
+- Create conversation
+- Get conversation by ID
 
-Completed
+#### MessageService
 
-- PostgreSQL
-- SQLAlchemy
-- Alembic
-- Engine
-- SessionLocal
-- Declarative Base
-- get_db()
+Responsible for:
 
----
+- Save messages
+- Load conversation history
 
-## Models
+#### ChatService
 
-### Conversation
-
-Fields
-
-- id
-- title
-- created_at
-
-Relationship
-
-Conversation
-↓
-Messages
-
-### Message
-
-Fields
-
-- id
-- conversation_id
-- role
-- content
-- created_at
-
-Foreign Key
-
-conversation_id → conversations.id
-
-Cascade Delete configured.
-
----
-
-## Services
-
-### ConversationService
-
-Completed
-
-- create_conversation()
-- get_conversation_by_id()
-
-### MessageService
-
-Completed
-
-- save_message()
-- get_conversation_messages()
-
-### ChatService
-
-Responsibilities
+Responsible for:
 
 - Validate conversation
 - Save user message
-- Load conversation history
-- Convert history into Gemini format
-- Call Gemini
-- Parse structured output
+- Build conversation history
+- Call AI Provider
 - Save assistant response
-- Return AIResponse
+- Transaction management
+- Rollback on failure
 
-Private helper
-
-```python
-_build_history(messages)
-```
-
-Database remains independent of Gemini format.
+ChatService now has **no Gemini-specific code**.
 
 ---
 
-# Conversation History
+### AI Provider Architecture
 
-Old implementation
+Refactored to Provider Pattern.
 
-```python
-self.conversations = {}
-```
-
-Removed completely.
-
-Current flow
-
-```text
-User Message
-      │
-      ▼
-Save to PostgreSQL
-      │
-      ▼
-Load History
-      │
-      ▼
-Convert to Gemini Format
-      │
-      ▼
-Gemini
-      │
-      ▼
-Save Assistant Message
-      │
-      ▼
-Return Response
-```
-
-PostgreSQL is the source of truth.
-
----
-
-# Dependency Injection
-
-Completed
-
-- Constructor Injection
-- Provider Functions
-- FastAPI Depends()
-
-Current dependency graph
-
-```text
-Request
-   │
-   ├──────────────┐
-   ▼              ▼
-get_db()   get_chat_service()
-                 │
-        ┌────────┴────────┐
-        ▼                 ▼
-MessageService   ConversationService
-        │                 │
-        └────────┬────────┘
-                 ▼
-            ChatService
-```
-
----
-
-# Gemini Dependency Injection
-
-Completed
-
-- Shared Gemini Client (Singleton)
-- Injected Model Name
-- ChatService no longer imports settings
-- Gemini Client created through provider function
-
-Dependency lifetimes
-
-| Dependency          | Lifetime    |
-| ------------------- | ----------- |
-| Database Session    | Per Request |
-| ChatService         | Per Request |
-| MessageService      | Per Request |
-| ConversationService | Per Request |
-| Gemini Client       | Singleton   |
-
----
-
-# AI Exception Architecture
-
-Completed
-
-Created
+Created:
 
 ```
-app/exceptions/ai.py
+app/providers/
+    base.py
+    gemini.py
 ```
 
-Contains
-
-- AIServiceError
-- AIRateLimitError
-- AITimeoutError
-- AIAuthenticationError
-- AIInvalidResponseError
-
-Business layer depends only on application exceptions.
-
-No Gemini SDK exceptions leak outside ChatService.
-
----
-
-# Global Exception Handling
-
-Architecture
-
-```text
-Gemini SDK Exception
-        │
-        ▼
-ChatService
-        │
-        ▼
-Business Exception
-        │
-        ▼
-Global Exception Handler
-        │
-        ▼
-HTTP Response
-```
-
-Services never raise HTTPException.
-
----
-
-# Transaction Management (NEW)
-
-## Completed
-
-Learned:
-
-- ACID
-- Atomicity
-- Transaction Boundaries
-- Unit of Work
-- commit()
-- rollback()
-- flush()
-- autoflush
-
-### Major Refactor
-
-Previously
-
-```text
-MessageService
-    commit()
-
-ConversationService
-    commit()
-```
-
-Now
-
-```text
-MessageService
-    add()
-
-ConversationService
-    add()
-
-ChatService
-    commit()
-```
-
-Services no longer own database transactions.
-
-ChatService is now the Unit of Work.
-
----
-
-## Current Transaction Flow
-
-```text
-Start Transaction
-
-↓
-
-Save User Message
-
-↓
-
-Load Conversation
-
-↓
-
-Call Gemini
-
-↓
-
-Validate Response
-
-↓
-
-Save Assistant Message
-
-↓
-
-Commit
-
-↓
-
-Return Response
-```
-
-If anything fails
-
-```text
-Rollback
-
-↓
-
-Re-raise Exception
-```
-
----
-
-## Important Concepts Learned
-
-### add()
-
-Marks an object as pending.
-
-Does NOT write to the database.
-
----
-
-### flush()
-
-Executes SQL statements.
-
-INSERT is sent to PostgreSQL.
-
-Changes are still inside the transaction.
-
-Rollback removes them.
-
----
-
-### commit()
-
-Makes the transaction permanent.
-
-Visible to every other database session.
-
-Rollback is no longer possible.
-
----
-
-### rollback()
-
-Returns the transaction to its previous state.
-
-Must always be called if a transaction fails.
-
----
-
-### Autoflush
-
-Before executing queries SQLAlchemy automatically flushes pending changes.
-
-Therefore
-
-```python
-db.add(user)
-
-db.query(User).all()
-```
-
-returns the newly added user even before commit.
-
----
-
-# Production Trade-offs Learned
-
-Compared
-
-## One Long Transaction
-
-Pros
-
-- Atomic
-- Simple
-
-Cons
-
-- Long-running transactions
-- Holds database resources
-
----
-
-## Two Transactions
-
-Pros
-
-- Better scalability
-- Short transactions
-
-Cons
-
-- User message may exist without assistant reply
-
----
-
-Learned about
-
-- Eventual Consistency
-- Message Status Pattern
-- Why ChatGPT-like systems usually do not keep transactions open during LLM inference.
-
----
-
-# Logging
-
-Completed
-
-Created
-
-```
-app/core/logging.py
-```
-
-Using Python logging instead of print().
-
-Current logs include
-
-- Timestamp
-- Log Level
-- Logger Name
-- Message
-
-Using
-
-```python
-logger = logging.getLogger(__name__)
-```
-
-instead of print().
-
----
-
-# Request ID Middleware
-
-Completed
-
-Created
-
-```
-app/middleware/request_id.py
-```
-
-Middleware
-
-- Generates UUID
-- Stores request.state.request_id
-- Calls next middleware / route
-- Adds
-
-```
-X-Request-ID
-```
-
-response header.
-
-Middleware registered inside
-
-```
-main.py
-```
-
-using
-
-```python
-app.middleware("http")(request_id_middleware)
-```
-
----
-
-# Design Principles Learned
-
-## Thin Routes
-
-Routes only
-
-- Validate Request
-- Resolve Dependencies
-- Call Services
-- Return Response
-
-No business logic.
-
----
-
-## Fat Services
-
-Business logic belongs inside services.
-
----
-
-## Dependency Injection
-
-Using
-
-- Constructor Injection
-- Provider Functions
-- FastAPI Depends()
-
----
-
-## Unit of Work
-
-Only one component owns the database transaction.
-
-Current owner
+`AIProvider` is now an abstraction.
 
 ```
 ChatService
+      │
+      ▼
+AIProvider
+      │
+      ▼
+GeminiProvider
 ```
 
----
-
-## Provider Independence
-
-Business layer should never depend directly on Gemini.
-
-Future providers
+This allows future providers such as:
 
 - OpenAI
 - Claude
+- Groq
 - Ollama
 
-should require minimal changes.
+without changing ChatService.
 
 ---
 
-## Database Is Source Of Truth
+### GeminiProvider
 
-Conversation history is rebuilt from PostgreSQL every request.
+Implemented:
 
----
-
-## Decoupling
-
-Database stores
-
-- role
-- content
-
-not Gemini JSON.
-
-Gemini formatting exists only inside
-
-```python
-_build_history()
-```
-
----
-
-# Current Project Status
-
-Completed
-
-- FastAPI Project
-- PostgreSQL
-- SQLAlchemy
-- Alembic
-- Conversation API
-- Message Model
-- Persistent Conversation History
-- Dependency Injection
-- Constructor Injection
-- Provider Functions
-- Shared Gemini Client
-- Injected Model Configuration
-- Global Exception Handling
-- AI Exception Hierarchy
-- Structured Gemini Output
-- Unit of Work
-- Transaction Management
-- commit / rollback ownership
+- Shared GenAI client
+- Response schema (`AIResponse`)
+- Structured JSON output
+- Provider abstraction
 - Logging
-- Request ID Middleware
-
-Architecture is now clean, modular and production-oriented.
+- Retry support using Tenacity
 
 ---
 
-# Immediate Next Step
+### Retry Mechanism
 
-## Structured Logging
-
-Implement production-grade logging.
-
-Topics
-
-- Log Formatter
-- JSON Logs
-- Request Context
-- contextvars
-- Automatic Request ID Injection
-- Structured Log Records
-
-Goal
-
-Instead of
+Using:
 
 ```
-INFO Calling Gemini
+tenacity
 ```
 
-produce
+Configured:
 
-```json
-{
-  "timestamp": "...",
-  "level": "INFO",
-  "request_id": "...",
-  "conversation_id": "...",
-  "service": "ChatService",
-  "message": "Calling Gemini"
-}
-```
-
-without manually passing request_id everywhere.
-
----
-
-# Future Roadmap
-
-After Structured Logging
-
-- contextvars
-- Request Timing Middleware
-- Automatic Exception Logging
-- Retry Logic
 - Exponential Backoff
-- Timeout Handling
-- Context Window Trimming
-- Conversation Summarization
-- Token Counting
-- Streaming Responses (SSE)
-- Authentication (JWT)
-- User-owned Conversations
-- Authorization
+- Maximum retry attempts
+- Retry only on `AIServiceError`
+- Retry logging using `before_sleep_log`
+
+---
+
+### Logging
+
+Implemented production-style structured logging.
+
+Features:
+
+- JSON logs
+- Request ID using `contextvars`
+- Logging Filter
+- Custom Formatter
+- Automatic Request ID injection
+- Central logging configuration
+
+Every request now has a traceable Request ID.
+
+---
+
+### Request Middleware
+
+Implemented:
+
+- UUID Request ID generation
+- ContextVar integration
+- Response header (`X-Request-ID`)
+- Request lifecycle cleanup
+
+---
+
+### Error Handling
+
+Custom exceptions:
+
+- AIServiceError
+- AIRateLimitError
+- AIAuthenticationError
+- AIInvalidResponseError
+- AITimeoutError
+- ConversationNotFoundError
+
+Proper rollback handling inside ChatService.
+
+---
+
+### Transaction Pattern
+
+Current design:
+
+- Services do **not** own transactions.
+- Routes/Application layer own commits.
+- Services use `flush()`/`refresh()` when database-generated values are required before commit.
+- ChatService performs a single transaction for the complete chat workflow.
+
+This follows a Unit of Work style architecture.
+
+---
+
+## Important Architectural Decisions
+
+### 1. Provider Pattern
+
+Business logic never imports Gemini SDK directly.
+
+```
+ChatService
+      ↓
+AIProvider
+      ↓
+GeminiProvider
+```
+
+---
+
+### 2. Separation of Responsibilities
+
+ConversationService
+
+- Conversation CRUD
+
+MessageService
+
+- Message persistence
+
+ChatService
+
+- Chat orchestration only
+
+GeminiProvider
+
+- AI communication only
+
+---
+
+### 3. Dependency Injection
+
+Shared objects are injected.
+
+Examples:
+
+- Database Session
+- Gemini Client
+- AI Provider
+- Services
+
+---
+
+### 4. Structured Logging
+
+Every log includes:
+
+- Timestamp
+- Level
+- Logger
+- Request ID
+- Message
+
+---
+
+### 5. Retry Logic
+
+Retry belongs inside the Provider layer, not inside ChatService.
+
+Reason:
+
+External API resilience is the provider's responsibility.
+
+---
+
+## Next Learning Steps
+
+Continue in this order:
+
+### 1. Complete Gemini Provider Hardening
+
+- Proper timeout handling
+- Exception mapping
+- Convert SDK exceptions into domain exceptions
+
+---
+
+### 2. Circuit Breaker Pattern
+
+Protect the application from repeatedly calling an unhealthy AI provider.
+
+---
+
+### 3. Provider Fallback
+
+Example:
+
+```
+Gemini
+    ↓
+OpenAI
+    ↓
+Claude
+```
+
+---
+
+### 4. Streaming Responses
+
+Implement:
+
+- Server-Sent Events (SSE)
+- Streaming tokens
+- Partial responses
+
+---
+
+### 5. Conversation Features
+
+- Conversation title generation
+- Rename conversation
+- Delete conversation
 - Pagination
 - Search
-- Redis
-- Background Tasks
-- Automatic Conversation Titles
-- Embeddings
-- Semantic Search
-- RAG
-- Multi-model Support
-- Docker
-- CI/CD
-- Monitoring
-- React Frontend
 
 ---
 
-# Instruction For Next Chat
+### 6. Authentication
 
-Assume everything above is already completed.
+- JWT
+- User model
+- User conversations
+- Ownership validation
 
-Do NOT explain again
+---
 
-- Python
-- FastAPI
-- SQLAlchemy
-- Alembic
-- PostgreSQL
-- Dependency Injection basics
-- Transactions basics
-- Logging basics
-- LLM basics
+### 7. Production Readiness
 
-Continue directly with
+- Docker
+- Docker Compose
+- Environment separation
+- Health checks
+- Metrics
+- CI/CD
+- Deployment
 
-## Next Task
+---
 
-Implement **Production Structured Logging using contextvars**.
+## Teaching Style Reminder
 
-Teaching Style
+Continue acting as a Senior AI Engineer mentoring a Junior Developer.
 
-- One task at a time.
-- Let me implement first.
-- Review my code.
-- Explain only what is necessary.
-- Focus on production architecture.
-- Continue as a Senior AI Engineer mentoring a Junior Developer.
+Rules:
+
+- Keep theory concise.
+- Explain why before coding.
+- Let me implement first when possible.
+- Use production-level architecture.
+- Compare with Node.js/Express when helpful.
+- Focus on writing clean, scalable AI backend code.
+- Prioritize understanding over speed.
+
+---
+
+## Current State
+
+The project has successfully evolved from a simple FastAPI + Gemini application into a layered production-style architecture with:
+
+- Clean service separation
+- AI Provider abstraction
+- Structured logging
+- Retry mechanism
+- Unit of Work transaction pattern
+- Dependency Injection
+- Production-oriented design
+
+The next phase focuses on making the AI provider resilient with timeout handling, exception mapping, circuit breakers, and provider fallback before moving on to streaming and authentication.
