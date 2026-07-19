@@ -12,12 +12,16 @@ from google.genai import types
 from app.exceptions.ai import (
     AIInvalidResponseError,
     AIServiceError,
+    AIAuthenticationError,
+    AIRateLimitError,
+    AITimeoutError,
 )
 from app.providers.base import AIProvider
 from app.schemas.chat import AIResponse
 import logging
 from typing import Any
 from app.core.circuit_breaker import CircuitBreaker
+from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +33,9 @@ class GeminiProvider(AIProvider):
         self.model = model
         self.breaker = breaker
 
+    def is_retryable_exception(exc: BaseException) -> bool:
+        return isinstance(exc, (AITimeoutError, AIRateLimitError))
+
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(
@@ -36,7 +43,7 @@ class GeminiProvider(AIProvider):
             min=1,
             max=10,
         ),
-        retry=retry_if_exception_type(AIServiceError),
+        retry=retry_if_exception_type(is_retryable_exception),
         reraise=True,
         before_sleep=before_sleep_log(logger, logging.WARNING),
     )
@@ -48,7 +55,6 @@ class GeminiProvider(AIProvider):
         self.breaker.before_request()
 
         try:
-
             logger.info("Calling Gemini")
 
             response = self.client.models.generate_content(
@@ -61,7 +67,9 @@ class GeminiProvider(AIProvider):
             )
 
             if response.parsed is None:
-                raise AIInvalidResponseError()
+                raise AIInvalidResponseError(
+                    "Gemini returned an empty or invalid response."
+                )
 
             self.breaker.record_success()
 
@@ -69,11 +77,20 @@ class GeminiProvider(AIProvider):
 
             return response.parsed
 
-        except AIInvalidResponseError:
-            self.breaker.record_failure()
-            raise
-
         except Exception as e:
             self.breaker.record_failure()
             logger.exception("Gemini request failed")
-            raise AIServiceError() from e
+            raise self._map_exception(e) from e
+
+    def _map_exception(self, exc: Exception) -> Exception:
+
+        if isinstance(exc, AIServiceError):
+            return exc
+
+        if isinstance(exc, ValidationError):
+            return AIInvalidResponseError("AI provider returned an invalid response.")
+
+        if isinstance(exc, TimeoutError):
+            return AITimeoutError("AI provider request timed out.")
+
+        return AIServiceError(f"Unexpected AI provider error: {exc}")
