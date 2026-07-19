@@ -11,7 +11,10 @@ from app.schemas.conversation import (
     RenameConversationRequest,
     ConversationListResponse,
 )
+from app.schemas.message import MessageListResponse
 from app.services.conversation_service import ConversationService
+from app.services.message_service import MessageService
+from app.exceptions.conversation import ConversationNotFoundError
 
 router = APIRouter(
     prefix="/conversations",
@@ -19,6 +22,7 @@ router = APIRouter(
 )
 
 conversation_service = ConversationService()
+message_service = MessageService()
 
 
 @router.post(
@@ -62,6 +66,33 @@ def list_conversations(
     return conversation_service.list_conversations(
         page, page_size, search_query, db, current_user.id
     )
+
+
+@router.get(
+    "/{conversation_id}/messages",
+    response_model=MessageListResponse,
+    status_code=status.HTTP_200_OK,
+)
+def list_conversation_messages(
+    conversation_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Enforce ownership before returning any messages: a conversation owned by
+    # another user (or a non-existent one) is simply "not found".
+    conversation = conversation_service.get_conversation_by_id(
+        db, conversation_id, current_user.id
+    )
+
+    if conversation is None:
+        raise ConversationNotFoundError(conversation_id)
+
+    messages = message_service.get_conversation_messages(
+        db=db,
+        conversation_id=conversation_id,
+    )
+
+    return MessageListResponse(messages=messages)
 
 
 @router.patch(

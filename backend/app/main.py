@@ -1,7 +1,10 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
 from app.api.routes.auth import router as auth_router
 from app.api.routes.chat import router as chat_router
 from app.api.routes.conversation import router as conversation_router
+from app.core.config import settings
 from app.exceptions.handlers import register_exception_handlers
 from app.core.logging import setup_logging
 from app.middleware.request_id import request_id_middleware
@@ -14,6 +17,17 @@ app = FastAPI(
     version="1.0.0",
 )
 register_exception_handlers(app)
+
+# Allow the Next.js frontend (and any configured origins) to call the API from
+# the browser. Origins are configured via the CORS_ORIGINS env var.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins_list,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["X-Request-ID"],
+)
 
 app.middleware("http")(request_id_middleware)
 
