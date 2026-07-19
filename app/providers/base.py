@@ -24,3 +24,15 @@ class AIProvider(ABC):
         """
 
         raise NotImplementedError
+
+    @abstractmethod
+    async def generate_title(
+        self,
+        user_message: str,
+        assistant_message: str,
+    ) -> str:
+        """
+        Generate a concise title for a conversation.
+        """
+
+        pass

@@ -5,8 +5,8 @@ from google.genai import types
 from app.core.circuit_breaker import CircuitBreaker
 from app.core.config import settings
 from app.providers.base import AIProvider
-from app.providers.fallback import FallbackProvider
-from app.providers.gemini import GeminiProvider
+from app.providers.fallback_provider import FallbackProvider
+from app.providers.gemini_provider import GeminiProvider
 from app.services.chat_service import ChatService
 from app.services.conversation_service import ConversationService
 from app.services.message_service import MessageService

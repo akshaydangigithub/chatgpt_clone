@@ -5,6 +5,7 @@ from typing import Any
 import logging
 from sqlalchemy.orm import Session
 
+from app.exceptions.ai import AIServiceError
 from app.exceptions.conversation import ConversationNotFoundError
 from app.models.message import Message
 from app.providers.base import AIProvider
@@ -91,23 +92,40 @@ class ChatService:
             content=content,
         )
 
-    def _generate_conversation_title(
+    async def _generate_conversation_title(
         self,
         db: Session,
         request: ChatRequest,
+        assistant_message: str,
     ) -> None:
         conversation = self.conversation_service.get_conversation_by_id(
             db,
             request.conversation_id,
         )
 
-        if conversation and conversation.title is None:
+        # Only title a conversation once, on its first exchange.
+        if conversation is None or conversation.title is not None:
+            return
+
+        try:
+            conversation.title = await self.provider.generate_title(
+                request.message,
+                assistant_message,
+            )
+        except AIServiceError:
+            # If the model is unavailable, fall back to a message snippet
+            # so the conversation still gets a usable title.
+            logger.warning(
+                "AI title generation failed for conversation %s; "
+                "falling back to message snippet",
+                request.conversation_id,
+            )
             self.conversation_service.generate_title(
                 conversation,
                 request.message,
             )
 
-    def generate_response(
+    async def generate_response(
         self,
         db: Session,
         request: ChatRequest,
@@ -121,7 +139,12 @@ class ChatService:
         try:
             history = self._prepare_history(db, request)
 
-            ai_response = self.provider.generate_response(history)
+            # provider.generate_response is a blocking (sync) network call, so
+            # run it in a worker thread to avoid stalling the event loop.
+            ai_response = await asyncio.to_thread(
+                self.provider.generate_response,
+                history,
+            )
 
             self._save_assistant_message(
                 db,
@@ -129,7 +152,11 @@ class ChatService:
                 ai_response.answer,
             )
 
-            self._generate_conversation_title(db, request)
+            await self._generate_conversation_title(
+                db,
+                request,
+                ai_response.answer,
+            )
 
             db.commit()
 
@@ -210,15 +237,21 @@ class ChatService:
                 )
                 return
 
+            assistant_message = "".join(chunks)
+
             self._save_assistant_message(
                 db,
                 request.conversation_id,
-                "".join(chunks),
+                assistant_message,
             )
 
             yield format_done()
 
-            self._generate_conversation_title(db, request)
+            await self._generate_conversation_title(
+                db,
+                request,
+                assistant_message,
+            )
 
             db.commit()
 

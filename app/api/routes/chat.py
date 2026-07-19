@@ -18,12 +18,12 @@ router = APIRouter(
     response_model=AIResponse,
     status_code=status.HTTP_200_OK,
 )
-def chat(
+async def chat(
     request: ChatRequest,
     db: Session = Depends(get_db),
     chat_service: ChatService = Depends(get_chat_service),
 ):
-    return chat_service.generate_response(
+    return await chat_service.generate_response(
         db=db,
         request=request,
     )
