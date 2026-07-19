@@ -10,6 +10,11 @@ from app.providers.base import AIProvider
 from app.schemas.chat import AIResponse, ChatRequest
 from app.services.conversation_service import ConversationService
 from app.services.message_service import MessageService
+from app.utils.sse import (
+    format_done,
+    format_error,
+    format_message,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -139,13 +144,15 @@ class ChatService:
 
             for chunk in self.provider.stream_response(history):
                 chunks.append(chunk)
-                yield chunk
+                yield format_message(chunk)
 
             self._save_assistant_message(
                 db,
                 request.conversation_id,
                 "".join(chunks),
             )
+
+            yield format_done()
 
             db.commit()
 
@@ -154,8 +161,11 @@ class ChatService:
                 request.conversation_id,
             )
 
-        except Exception:
+        except Exception as e:
             db.rollback()
+
+            yield format_error(str(e))
+
             logger.exception(
                 "Streaming failed for conversation %s",
                 request.conversation_id,

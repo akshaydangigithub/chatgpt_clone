@@ -2,7 +2,8 @@
 
 ## Goal
 
-Build a production-style ChatGPT Clone Backend using FastAPI + Gemini while learning AI Engineering step by step.
+Build a production-style ChatGPT Clone Backend using FastAPI + Gemini
+while learning AI Engineering step by step.
 
 ---
 
@@ -10,66 +11,43 @@ Build a production-style ChatGPT Clone Backend using FastAPI + Gemini while lear
 
 ## ✅ Completed
 
-### Project Foundation
+### Foundation
 
 - FastAPI project structure
-- Environment configuration using `pydantic-settings`
+- Environment configuration (`pydantic-settings`)
 - Dependency Injection
-- PostgreSQL integration
+- PostgreSQL
 - SQLAlchemy ORM
 - Alembic migrations
 - Repository / Service architecture
 - Centralized configuration
 
----
+### Database
 
-### Database Models
+- Conversation model
+- Message model
+- Relationships
+- Database migrations
 
-Completed:
-
-- Conversation
-- Message
-
-Implemented relationships and database migrations.
-
----
-
-### API Layer
-
-Implemented:
+### API
 
 - Create Conversation
 - Chat Endpoint
 - Streaming Chat Endpoint
 
-Using:
-
-- Request/Response Schemas
-- Dependency Injection
-- Proper Response Models
-- StreamingResponse
-
----
-
 ### Services
 
 #### ConversationService
-
-Responsible for:
 
 - Create conversation
 - Get conversation by ID
 
 #### MessageService
 
-Responsible for:
-
 - Save messages
 - Load conversation history
 
 #### ChatService
-
-Implemented:
 
 - Validate conversation
 - Save user message
@@ -79,240 +57,65 @@ Implemented:
 - Save assistant response
 - Transaction management
 - Rollback on failure
-- Streaming response orchestration
+- Streaming orchestration
 
-Streaming flow:
+### AI Provider Pattern
 
-```
-Validate Conversation
-        │
-        ▼
-Save User Message
-        │
-        ▼
-Load History
-        │
-        ▼
-Provider.stream_response()
-        │
-        ▼
-Yield Chunks
-        │
-        ▼
-Build Full Response
-        │
-        ▼
-Save Assistant Message
-        │
-        ▼
-Commit Transaction
-```
+Implemented:
 
-ChatService contains **no Gemini-specific logic**.
+ChatService → AIProvider → FallbackProvider → GeminiProvider
 
----
-
-### AI Provider Architecture
-
-Implemented Provider Pattern.
-
-```
-ChatService
-      │
-      ▼
-AIProvider
-      │
-      ▼
-FallbackProvider
-      │
-      ▼
-GeminiProvider
-```
-
-Business layer depends only on `AIProvider`.
-
-Future providers:
-
-- OpenAI
-- Claude
-- Groq
-- Ollama
-- Azure OpenAI
-
----
+Business logic is provider-agnostic.
 
 ### GeminiProvider
 
-Implemented:
-
-- Shared Gemini Client
-- Structured JSON Output
+- Shared Gemini client
+- Structured JSON output
 - AIResponse schema
-- Retry
+- Retry (Tenacity)
 - Circuit Breaker
 - Exception Mapping
-- Streaming Support
+- Streaming support
 
-Supports:
+Important architecture rule:
 
-- generate_response()
-- stream_response()
+- GeminiProvider ONLY returns AI text.
+- No HTTP/SSE formatting inside the provider.
+- HTTP formatting belongs to ChatService.
 
-Responsibilities:
+### Streaming
 
-- Call Gemini
-- Stream text chunks
-- Exception Mapping
-- Circuit Breaker
-- Retry (non-streaming)
-- Yield plain text chunks
+Implemented: - StreamingResponse - Python generators - Incremental token
+streaming - Response persistence - Transaction handling after stream
+completion
 
----
-
-### Streaming Responses ✅
-
-Implemented production-style streaming.
-
-Implemented:
-
-- Provider streaming
-- ChatService streaming
-- Streaming FastAPI endpoint
-- StreamingResponse
-- Iterator-based provider interface
-- Incremental chunk streaming
-- Final response persistence
-
-Architecture:
-
-```
-FastAPI Route
-      │
-      ▼
-StreamingResponse
-      │
-      ▼
-ChatService.stream_response()
-      │
-      ▼
-AIProvider.stream_response()
-      │
-      ▼
-FallbackProvider
-      │
-      ▼
-GeminiProvider
-      │
-      ▼
-Gemini Streaming API
-```
-
-Current behavior:
-
-- Validate conversation
-- Save user message
-- Load history
-- Stream AI chunks
-- Yield chunks immediately
-- Build final response
-- Save complete assistant message
-- Commit transaction
-
-Learned:
-
-- Python Generators
-- yield
-- Iterator
-- StreamingResponse
-- HTTP Streaming
-- AI Token Streaming
-- Streaming Architecture
-- Generator lifecycle
-- Lazy execution
-
----
-
-### Retry Mechanism
-
-Using:
+### Retry
 
 - Tenacity
-
-Configured:
-
-- Exponential Backoff
-- 3 retry attempts
-- Retry only recoverable errors
-
-Retry:
-
-- Timeout
-- Rate Limit
-
-No Retry:
-
-- Authentication
-- Invalid Response
-- Unknown Errors
-
-Retry currently applies only to non-streaming responses.
-
----
-
-### Exception Mapping
-
-Implemented provider-level exception mapping.
-
-Mappings:
-
-- ValidationError → AIInvalidResponseError
-- TimeoutError → AITimeoutError
-- Unknown Exception → AIServiceError
-
----
+- Exponential backoff
+- Retry on recoverable errors
+- No retry on authentication/validation errors
 
 ### Circuit Breaker
-
-Implemented:
-
-States:
 
 - CLOSED
 - OPEN
 - HALF_OPEN
 
-Integrated inside GeminiProvider.
-
----
-
 ### Logging
 
-Implemented:
-
-- Rich Logging
+- Rich logging
 - Request ID
 - ContextVars
-- Logging Filter
-- Custom Handler
-- Tracebacks
-- Uvicorn Integration
-
----
+- Uvicorn integration
 
 ### Middleware
 
-Implemented:
-
-- Request ID
-- ContextVar
-- Response Header
-- Cleanup
-
----
+- Request ID middleware
+- Response header
+- Context cleanup
 
 ### Error Handling
-
-Implemented:
 
 - AIServiceError
 - AIRateLimitError
@@ -322,71 +125,91 @@ Implemented:
 - AICircuitOpenError
 - ConversationNotFoundError
 
-Rollback handled inside ChatService.
-
----
-
-### Transaction Pattern
-
-Current Design:
-
-Routes
-
-↓
-
-ChatService
-
-↓
-
-Commit / Rollback
-
-Streaming transaction handled inside ChatService because generator execution continues after route returns.
-
----
-
 ### Dependency Injection
 
-Dependency graph:
+Fully injected: - Database session - Gemini client - Circuit breaker -
+GeminiProvider - FallbackProvider - Services
 
-```
-FastAPI Route
-      │
-      ▼
-ChatService
-      │
-      ▼
-AIProvider
-      │
-      ▼
-FallbackProvider
-      │
-      ▼
-GeminiProvider
-```
+---
 
-Injected:
+# ✅ NEW: Production-style Server-Sent Events (SSE)
 
-- Database Session
-- Gemini Client
-- Circuit Breaker
-- GeminiProvider
-- FallbackProvider
-- Services
+Implemented:
+
+- text/event-stream responses
+- Proper SSE headers
+- Generic SSE formatter
+- Structured JSON events
+- Message events
+- End events
+- Error events
+- Clean separation of concerns
+
+Current architecture:
+
+FastAPI Route → StreamingResponse → ChatService → SSE Formatter →
+AIProvider → GeminiProvider
+
+## SSE Utility
+
+app/utils/sse.py
+
+Contains:
+
+- format_sse(event, data)
+- format_message(text)
+- format_end()
+- format_error(message)
+
+Example output:
+
+event: message data: {"text":"Hello"}
+
+event: end data: {}
+
+## ChatService responsibilities
+
+During streaming:
+
+- Receive plain text from provider
+- Convert text into SSE events
+- Yield formatted events
+- Persist final response
+- Emit end event
+- Emit error event when failures occur
+
+## GeminiProvider responsibilities
+
+Provider only yields:
+
+- Plain text chunks
+
+It must NOT:
+
+- Know about HTTP
+- Know about SSE
+- Format responses
+
+This separation keeps the provider reusable for WebSockets, CLI, gRPC,
+or any future transport.
 
 ---
 
 # Architecture Principles Learned
 
 - Layered Architecture
+- Repository Pattern
+- Service Layer
+- Dependency Injection
 - Provider Pattern
 - Provider Fallback
-- Dependency Injection
-- Service Layer
 - Unit of Work
+- Transaction Management
 - Exception Mapping
 - Retry Pattern
 - Circuit Breaker
 - Streaming Architecture
+- Server-Sent Events (SSE)
 - Separation of Concerns
 - Business Orchestration
 
@@ -400,14 +223,26 @@ Injected:
 - Exponential Backoff
 - Structured Logging
 - Request Correlation
-- Provider Pattern
-- Dependency Injection
-- Repository Pattern
-- Service Layer
 - StreamingResponse
 - Python Generators
 - Iterator Pattern
 - Token Streaming
+- SSE Protocol
+- text/event-stream
+- JSON Event Streaming
+
+---
+
+# Current Streaming Flow
+
+Browser → StreamingResponse → ChatService.stream_response() →
+format_message() → GeminiProvider.stream_response() → Gemini API
+
+Events returned:
+
+- message
+- end
+- error
 
 ---
 
@@ -415,30 +250,17 @@ Injected:
 
 Continue in this order.
 
-## 1. Server-Sent Events (SSE) ⭐
+## 1. Improve SSE
 
-Current streaming works.
+Still remaining:
 
-Next improve it by implementing proper SSE.
-
-Implement:
-
-- text/event-stream
-- SSE Event Format
-- data: <chunk>\n\n
-- End Events
-- Error Events
-- Heartbeat Events
-- SSE Formatter
-
-Learn:
-
-- SSE Protocol
+- Heartbeat events
+- Event IDs
+- Retry field
+- Multi-line data support
 - Browser EventSource
-- fetch() Streaming
-- Event framing
-
----
+- fetch() streaming
+- Frontend integration
 
 ## 2. Conversation Features
 
@@ -447,22 +269,18 @@ Implement:
 - Auto Title Generation
 - Rename Conversation
 - Delete Conversation
+- Conversation Listing
 - Pagination
 - Search
-- Conversation Listing
-
----
 
 ## 3. Authentication
 
 Implement:
 
 - JWT
-- User Model
-- User Conversations
-- Ownership Validation
-
----
+- User model
+- User conversations
+- Ownership validation
 
 ## 4. Production Readiness
 
@@ -470,8 +288,8 @@ Implement:
 
 - Docker
 - Docker Compose
-- Environment Separation
-- Health Checks
+- Environment separation
+- Health checks
 - Metrics
 - OpenTelemetry
 - Prometheus
@@ -491,7 +309,7 @@ Rules:
 - Let me implement first.
 - Follow production architecture.
 - Compare with Node.js when useful.
-- Prioritize understanding over speed.
+- Focus on production-quality design rather than shortcuts.
 
 ---
 
@@ -504,39 +322,20 @@ The backend now supports:
 - Service Layer
 - Dependency Injection
 - Provider Pattern
-- Provider Fallback
 - Retry
 - Circuit Breaker
 - Exception Mapping
 - Structured Logging
 - Request Correlation
-- Streaming Responses
-- Production-style Transaction Handling
+- Streaming AI Responses
+- Production-style SSE
+- JSON SSE Events
+- Transaction-safe Streaming
+- Provider-independent Business Logic
 
-Current Architecture:
+Next milestone:
 
-```
-FastAPI
-    │
-    ▼
-StreamingResponse
-    │
-    ▼
-ChatService
-    │
-    ▼
-AIProvider
-    │
-    ▼
-FallbackProvider
-    │
-    ▼
-GeminiProvider
-    │
-    ▼
-Gemini API
-```
-
-The project is now capable of returning both normal and streamed AI responses while keeping the business layer completely independent of the AI provider.
-
-The next milestone is implementing **proper Server-Sent Events (SSE)**, followed by Conversation Features, Authentication, and Production Deployment.
+1.  Complete advanced SSE features.
+2.  Build Conversation Management.
+3.  Add Authentication.
+4.  Prepare the project for production deployment.
