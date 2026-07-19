@@ -18,14 +18,14 @@ Build a production-style ChatGPT Clone Backend using FastAPI + Gemini while lear
 - PostgreSQL integration
 - SQLAlchemy ORM
 - Alembic migrations
-- Repository/Service style architecture
+- Repository/Service architecture
 - Centralized configuration
 
 ---
 
 ### Database Models
 
-Completed models:
+Completed:
 
 - Conversation
 - Message
@@ -36,7 +36,7 @@ Implemented relationships and database migrations.
 
 ### API Layer
 
-Implemented endpoints:
+Implemented:
 
 - Create Conversation
 - Chat Endpoint
@@ -50,8 +50,6 @@ Using:
 ---
 
 ### Services
-
-Implemented:
 
 #### ConversationService
 
@@ -73,29 +71,28 @@ Responsible for:
 
 - Validate conversation
 - Save user message
-- Build conversation history
+- Load history
 - Call AI Provider
 - Save assistant response
 - Transaction management
 - Rollback on failure
 
-ChatService now has **no Gemini-specific code**.
+ChatService contains **no Gemini-specific logic**.
 
 ---
 
 ### AI Provider Architecture
 
-Refactored to Provider Pattern.
-
-Created:
+Implemented Provider Pattern.
 
 ```
-app/providers/
-    base.py
-    gemini.py
+app/
+└── providers/
+    ├── base.py
+    ├── gemini.py
 ```
 
-`AIProvider` is now an abstraction.
+Architecture:
 
 ```
 ChatService
@@ -107,14 +104,14 @@ AIProvider
 GeminiProvider
 ```
 
-This allows future providers such as:
+Future providers can be added without modifying ChatService.
+
+Examples:
 
 - OpenAI
 - Claude
 - Groq
 - Ollama
-
-without changing ChatService.
 
 ---
 
@@ -122,12 +119,20 @@ without changing ChatService.
 
 Implemented:
 
-- Shared GenAI client
-- Response schema (`AIResponse`)
-- Structured JSON output
-- Provider abstraction
+- Shared Gemini Client
+- Structured JSON Output
+- `AIResponse` schema
 - Logging
-- Retry support using Tenacity
+- Retry mechanism
+- Circuit Breaker integration
+
+Responsibilities:
+
+- Validate circuit state
+- Call Gemini
+- Parse structured response
+- Record success/failure
+- Raise domain exceptions
 
 ---
 
@@ -135,33 +140,123 @@ Implemented:
 
 Using:
 
-```
-tenacity
-```
+- Tenacity
 
 Configured:
 
 - Exponential Backoff
-- Maximum retry attempts
+- 3 retry attempts
 - Retry only on `AIServiceError`
-- Retry logging using `before_sleep_log`
+- `before_sleep_log`
+
+Retry belongs to the Provider layer.
+
+---
+
+### Circuit Breaker
+
+Implemented custom Circuit Breaker from scratch.
+
+States:
+
+- CLOSED
+- OPEN
+- HALF_OPEN
+
+Methods:
+
+- `before_request()`
+- `record_success()`
+- `record_failure()`
+- `_open()`
+
+Features:
+
+- Consecutive failure counting
+- Recovery timeout
+- Automatic transition:
+
+```
+CLOSED
+    │
+    ▼
+OPEN
+    │
+(after timeout)
+    ▼
+HALF_OPEN
+    │        │
+Success     Failure
+    │        │
+    ▼        ▼
+CLOSED     OPEN
+```
+
+Integrated inside `GeminiProvider`.
+
+Current request flow:
+
+```
+ChatService
+      │
+      ▼
+GeminiProvider
+      │
+      ▼
+CircuitBreaker.before_request()
+      │
+      ▼
+Gemini API
+      │
+      ├── Success
+      │       │
+      │       ▼
+      │ record_success()
+      │
+      └── Failure
+              │
+              ▼
+      record_failure()
+```
+
+Learned:
+
+- Why Retry alone is insufficient
+- Retry vs Circuit Breaker
+- Fail Fast principle
+- Recovery testing using HALF_OPEN
+- Dependency Injection for shared breaker instance
+- Why Circuit Breaker belongs in Provider layer
 
 ---
 
 ### Logging
 
-Implemented production-style structured logging.
+Implemented production-style logging.
 
 Features:
 
-- JSON logs
-- Request ID using `contextvars`
+- Rich logging
+- Request ID using ContextVars
 - Logging Filter
-- Custom Formatter
+- Custom Rich Handler
 - Automatic Request ID injection
-- Central logging configuration
+- Uvicorn integration
+- Tracebacks with locals
+- Clean console output
 
-Every request now has a traceable Request ID.
+Current logging includes:
+
+- Request ID
+- Logger
+- Timestamp
+- Level
+- Message
+
+Future improvement:
+
+- Log Circuit Breaker state transitions
+- JSON logging for production
 
 ---
 
@@ -172,22 +267,23 @@ Implemented:
 - UUID Request ID generation
 - ContextVar integration
 - Response header (`X-Request-ID`)
-- Request lifecycle cleanup
+- Request cleanup
 
 ---
 
 ### Error Handling
 
-Custom exceptions:
+Current custom exceptions:
 
 - AIServiceError
 - AIRateLimitError
 - AIAuthenticationError
 - AIInvalidResponseError
 - AITimeoutError
+- AICircuitOpenError
 - ConversationNotFoundError
 
-Proper rollback handling inside ChatService.
+Rollback handling implemented inside ChatService.
 
 ---
 
@@ -195,32 +291,45 @@ Proper rollback handling inside ChatService.
 
 Current design:
 
-- Services do **not** own transactions.
-- Routes/Application layer own commits.
-- Services use `flush()`/`refresh()` when database-generated values are required before commit.
-- ChatService performs a single transaction for the complete chat workflow.
+- Routes own commits
+- Services use `flush()` and `refresh()`
+- ChatService executes one transaction for the complete chat workflow
 
-This follows a Unit of Work style architecture.
+Following Unit of Work architecture.
 
 ---
 
-## Important Architectural Decisions
+# Architecture Principles Learned
 
-### 1. Provider Pattern
+## Provider Pattern
 
-Business logic never imports Gemini SDK directly.
+Business logic never imports Gemini SDK.
 
 ```
 ChatService
-      ↓
+      │
+      ▼
 AIProvider
-      ↓
+      │
+      ▼
 GeminiProvider
 ```
 
 ---
 
-### 2. Separation of Responsibilities
+## Dependency Injection
+
+Injected:
+
+- Database Session
+- Gemini Client
+- Circuit Breaker
+- AI Provider
+- Services
+
+---
+
+## Separation of Responsibilities
 
 ConversationService
 
@@ -232,102 +341,126 @@ MessageService
 
 ChatService
 
-- Chat orchestration only
+- Business orchestration
 
 GeminiProvider
 
-- AI communication only
+- AI communication
+
+CircuitBreaker
+
+- Provider resilience
 
 ---
 
-### 3. Dependency Injection
+## Production Concepts Learned
 
-Shared objects are injected.
-
-Examples:
-
-- Database Session
-- Gemini Client
-- AI Provider
-- Services
-
----
-
-### 4. Structured Logging
-
-Every log includes:
-
-- Timestamp
-- Level
-- Logger
-- Request ID
-- Message
+- Layered Architecture
+- Dependency Injection
+- Provider Pattern
+- Retry Pattern
+- Circuit Breaker Pattern
+- Structured Logging
+- Request Correlation
+- Unit of Work
+- Fail Fast
+- Exponential Backoff
 
 ---
 
-### 5. Retry Logic
+# Next Learning Steps
 
-Retry belongs inside the Provider layer, not inside ChatService.
+Continue in this order.
 
-Reason:
+## 1. Exception Mapping ⭐ (Current Next Topic)
 
-External API resilience is the provider's responsibility.
+Current implementation:
 
----
+```
+Exception
+      │
+      ▼
+AIServiceError
+```
 
-## Next Learning Steps
+Need to improve to:
 
-Continue in this order:
+```
+Gemini SDK Exception
+        │
+        ▼
+Domain Exception
 
-### 1. Complete Gemini Provider Hardening
+Timeout
+    ▼
+AITimeoutError
 
-- Proper timeout handling
+429
+    ▼
+AIRateLimitError
+
+401
+    ▼
+AIAuthenticationError
+
+Invalid Response
+    ▼
+AIInvalidResponseError
+
+Unknown
+    ▼
+AIServiceError
+```
+
+Learn:
+
+- Domain exceptions
 - Exception mapping
-- Convert SDK exceptions into domain exceptions
+- Retry decisions
+- Circuit Breaker interaction
+- Better provider resilience
 
 ---
 
-### 2. Circuit Breaker Pattern
-
-Protect the application from repeatedly calling an unhealthy AI provider.
-
----
-
-### 3. Provider Fallback
+## 2. Provider Fallback
 
 Example:
 
 ```
 Gemini
-    ↓
+    │
+    ▼
 OpenAI
-    ↓
+    │
+    ▼
 Claude
 ```
 
 ---
 
-### 4. Streaming Responses
+## 3. Streaming Responses
 
 Implement:
 
-- Server-Sent Events (SSE)
-- Streaming tokens
+- SSE
+- Token streaming
 - Partial responses
 
 ---
 
-### 5. Conversation Features
+## 4. Conversation Features
 
-- Conversation title generation
-- Rename conversation
-- Delete conversation
+- Auto title generation
+- Rename
+- Delete
 - Pagination
 - Search
 
 ---
 
-### 6. Authentication
+## 5. Authentication
+
+Implement:
 
 - JWT
 - User model
@@ -336,19 +469,19 @@ Implement:
 
 ---
 
-### 7. Production Readiness
+## 6. Production Readiness
 
 - Docker
 - Docker Compose
 - Environment separation
-- Health checks
+- Health Checks
 - Metrics
 - CI/CD
 - Deployment
 
 ---
 
-## Teaching Style Reminder
+# Teaching Style Reminder
 
 Continue acting as a Senior AI Engineer mentoring a Junior Developer.
 
@@ -356,24 +489,26 @@ Rules:
 
 - Keep theory concise.
 - Explain why before coding.
-- Let me implement first when possible.
-- Use production-level architecture.
-- Compare with Node.js/Express when helpful.
-- Focus on writing clean, scalable AI backend code.
+- Let me implement first whenever possible.
+- Follow production architecture.
+- Compare with Node.js/Express when useful.
+- Focus on clean, scalable AI backend engineering.
 - Prioritize understanding over speed.
 
 ---
 
-## Current State
+# Current State
 
-The project has successfully evolved from a simple FastAPI + Gemini application into a layered production-style architecture with:
+The project has evolved into a production-style AI backend featuring:
 
-- Clean service separation
-- AI Provider abstraction
-- Structured logging
-- Retry mechanism
-- Unit of Work transaction pattern
+- Clean Layered Architecture
+- Service Separation
+- Provider Pattern
 - Dependency Injection
+- Structured Logging
+- Retry Mechanism
+- Circuit Breaker
+- Unit of Work
 - Production-oriented design
 
-The next phase focuses on making the AI provider resilient with timeout handling, exception mapping, circuit breakers, and provider fallback before moving on to streaming and authentication.
+The next milestone is **Exception Mapping**, followed by Provider Fallback, Streaming Responses, Authentication, and Production Deployment.

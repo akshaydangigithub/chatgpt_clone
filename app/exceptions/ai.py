@@ -21,3 +21,8 @@ class AIInvalidResponseError(AIServiceError):
 class AIAuthenticationError(AIServiceError):
     def __init__(self):
         super().__init__("AI provider authentication failed.")
+
+
+class AICircuitOpenError(Exception):
+    def __init__(self):
+        super().__init__("AI Circuit is opened")

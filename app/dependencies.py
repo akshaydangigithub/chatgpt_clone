@@ -7,6 +7,7 @@ from app.core.config import settings
 from app.providers.gemini import GeminiProvider
 from app.providers.base import AIProvider
 from google.genai import types
+from app.core.circuit_breaker import CircuitBreaker
 
 
 def get_message_service():
@@ -29,12 +30,21 @@ def get_genai_client():
     return client
 
 
+breaker = CircuitBreaker()
+
+
+def get_circuit_breaker():
+    return breaker
+
+
 def get_ai_provider(
     client: genai.Client = Depends(get_genai_client),
+    breaker: CircuitBreaker = Depends(get_circuit_breaker),
 ) -> AIProvider:
     return GeminiProvider(
         client=client,
         model=settings.GEMINI_MODEL,
+        breaker=breaker,
     )
 
 

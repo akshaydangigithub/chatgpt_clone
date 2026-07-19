@@ -17,19 +17,17 @@ from app.providers.base import AIProvider
 from app.schemas.chat import AIResponse
 import logging
 from typing import Any
+from app.core.circuit_breaker import CircuitBreaker
 
 logger = logging.getLogger(__name__)
 
 
 class GeminiProvider(AIProvider):
 
-    def __init__(
-        self,
-        client: genai.Client,
-        model: str,
-    ):
+    def __init__(self, client: genai.Client, model: str, breaker: CircuitBreaker):
         self.client = client
         self.model = model
+        self.breaker = breaker
 
     @retry(
         stop=stop_after_attempt(3),
@@ -47,6 +45,8 @@ class GeminiProvider(AIProvider):
         history: list[dict[str, Any]],
     ) -> AIResponse:
 
+        self.breaker.before_request()
+
         try:
 
             logger.info("Calling Gemini")
@@ -63,13 +63,17 @@ class GeminiProvider(AIProvider):
             if response.parsed is None:
                 raise AIInvalidResponseError()
 
+            self.breaker.record_success()
+
             logger.info("Gemini response received")
 
             return response.parsed
 
         except AIInvalidResponseError:
+            self.breaker.record_failure()
             raise
 
         except Exception as e:
+            self.breaker.record_failure()
             logger.exception("Gemini request failed")
             raise AIServiceError() from e
