@@ -1,6 +1,7 @@
 import asyncio
 from collections.abc import AsyncIterator
 from typing import Any
+from uuid import UUID
 
 import logging
 from sqlalchemy.orm import Session
@@ -51,11 +52,13 @@ class ChatService:
         self,
         db: Session,
         request: ChatRequest,
+        user_id: UUID,
     ) -> list[dict[str, Any]]:
 
         conversation = self.conversation_service.get_conversation_by_id(
             db,
             request.conversation_id,
+            user_id,
         )
 
         if conversation is None:
@@ -97,10 +100,12 @@ class ChatService:
         db: Session,
         request: ChatRequest,
         assistant_message: str,
+        user_id: UUID,
     ) -> None:
         conversation = self.conversation_service.get_conversation_by_id(
             db,
             request.conversation_id,
+            user_id,
         )
 
         # Only title a conversation once, on its first exchange.
@@ -129,6 +134,7 @@ class ChatService:
         self,
         db: Session,
         request: ChatRequest,
+        user_id: UUID,
     ) -> AIResponse:
 
         logger.info(
@@ -137,7 +143,7 @@ class ChatService:
         )
 
         try:
-            history = self._prepare_history(db, request)
+            history = self._prepare_history(db, request, user_id)
 
             # provider.generate_response is a blocking (sync) network call, so
             # run it in a worker thread to avoid stalling the event loop.
@@ -156,6 +162,7 @@ class ChatService:
                 db,
                 request,
                 ai_response.answer,
+                user_id,
             )
 
             db.commit()
@@ -179,6 +186,7 @@ class ChatService:
         self,
         db: Session,
         request: ChatRequest,
+        user_id: UUID,
     ) -> AsyncIterator[str]:
 
         logger.info(
@@ -186,7 +194,7 @@ class ChatService:
             request.conversation_id,
         )
 
-        history = self._prepare_history(db, request)
+        history = self._prepare_history(db, request, user_id)
 
         chunks: list[str] = []
         # Single-producer/single-consumer queue that multiplexes real AI
@@ -251,6 +259,7 @@ class ChatService:
                 db,
                 request,
                 assistant_message,
+                user_id,
             )
 
             db.commit()

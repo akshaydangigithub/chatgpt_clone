@@ -14,3 +14,11 @@ class ConversationResponse(BaseModel):
 
 class RenameConversationRequest(BaseModel):
     title: str
+
+
+class ConversationListResponse(BaseModel):
+    conversations: list[ConversationResponse]
+    page: int
+    page_size: int
+    total: int
+    total_pages: int
