@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 
 from app.schemas.chat import AIResponse
+from collections.abc import Iterator
 
 
 class AIProvider(ABC):
@@ -12,4 +13,12 @@ class AIProvider(ABC):
         """
         Generate an AI response from the conversation history.
         """
+        raise NotImplementedError
+
+    @abstractmethod
+    def stream_response(self, history: list) -> Iterator[str]:
+        """
+        Generate an AI stream Response from the conversation history.
+        """
+
         raise NotImplementedError

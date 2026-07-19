@@ -18,7 +18,7 @@ Build a production-style ChatGPT Clone Backend using FastAPI + Gemini while lear
 - PostgreSQL integration
 - SQLAlchemy ORM
 - Alembic migrations
-- Repository/Service architecture
+- Repository / Service architecture
 - Centralized configuration
 
 ---
@@ -40,12 +40,14 @@ Implemented:
 
 - Create Conversation
 - Chat Endpoint
+- Streaming Chat Endpoint
 
 Using:
 
 - Request/Response Schemas
 - Dependency Injection
 - Proper Response Models
+- StreamingResponse
 
 ---
 
@@ -67,15 +69,44 @@ Responsible for:
 
 #### ChatService
 
-Responsible for:
+Implemented:
 
 - Validate conversation
 - Save user message
-- Load history
+- Load conversation history
+- Build provider history
 - Call AI Provider
 - Save assistant response
 - Transaction management
 - Rollback on failure
+- Streaming response orchestration
+
+Streaming flow:
+
+```
+Validate Conversation
+        │
+        ▼
+Save User Message
+        │
+        ▼
+Load History
+        │
+        ▼
+Provider.stream_response()
+        │
+        ▼
+Yield Chunks
+        │
+        ▼
+Build Full Response
+        │
+        ▼
+Save Assistant Message
+        │
+        ▼
+Commit Transaction
+```
 
 ChatService contains **no Gemini-specific logic**.
 
@@ -83,17 +114,7 @@ ChatService contains **no Gemini-specific logic**.
 
 ### AI Provider Architecture
 
-Implemented the Provider Pattern.
-
-```
-app/
-└── providers/
-    ├── base.py
-    ├── gemini.py
-    └── fallback.py
-```
-
-Architecture:
+Implemented Provider Pattern.
 
 ```
 ChatService
@@ -108,11 +129,9 @@ FallbackProvider
 GeminiProvider
 ```
 
-Business logic depends only on the `AIProvider` interface.
+Business layer depends only on `AIProvider`.
 
-Future providers can be added without modifying `ChatService`.
-
-Examples:
+Future providers:
 
 - OpenAI
 - Claude
@@ -128,68 +147,88 @@ Implemented:
 
 - Shared Gemini Client
 - Structured JSON Output
-- `AIResponse` schema
-- Logging
-- Retry mechanism
-- Circuit Breaker integration
+- AIResponse schema
+- Retry
+- Circuit Breaker
 - Exception Mapping
+- Streaming Support
+
+Supports:
+
+- generate_response()
+- stream_response()
 
 Responsibilities:
 
-- Validate Circuit Breaker state
 - Call Gemini
-- Parse structured response
-- Map SDK exceptions into domain exceptions
-- Record success/failure
-- Raise domain exceptions
+- Stream text chunks
+- Exception Mapping
+- Circuit Breaker
+- Retry (non-streaming)
+- Yield plain text chunks
 
 ---
 
-### FallbackProvider
+### Streaming Responses ✅
 
-Implemented a production-style fallback provider.
+Implemented production-style streaming.
 
-Responsibilities:
+Implemented:
 
-- Accept multiple AI providers
-- Try providers in priority order
-- Return immediately on first success
-- Continue to next provider on failure
-- Collect provider failures
-- Raise a single error if all providers fail
-- Log provider failures
+- Provider streaming
+- ChatService streaming
+- Streaming FastAPI endpoint
+- StreamingResponse
+- Iterator-based provider interface
+- Incremental chunk streaming
+- Final response persistence
 
-Current implementation:
+Architecture:
 
 ```
-ChatService
+FastAPI Route
+      │
+      ▼
+StreamingResponse
+      │
+      ▼
+ChatService.stream_response()
+      │
+      ▼
+AIProvider.stream_response()
       │
       ▼
 FallbackProvider
       │
       ▼
 GeminiProvider
+      │
+      ▼
+Gemini Streaming API
 ```
 
-Future configuration:
+Current behavior:
 
-```
-FallbackProvider(
-    providers=[
-        gemini_provider,
-        openai_provider,
-        claude_provider,
-    ]
-)
-```
+- Validate conversation
+- Save user message
+- Load history
+- Stream AI chunks
+- Yield chunks immediately
+- Build final response
+- Save complete assistant message
+- Commit transaction
 
 Learned:
 
-- Provider Fallback Pattern
-- Runtime Provider Composition
-- Composition Root
-- Open/Closed Principle
-- Failover Strategy
+- Python Generators
+- yield
+- Iterator
+- StreamingResponse
+- HTTP Streaming
+- AI Token Streaming
+- Streaming Architecture
+- Generator lifecycle
+- Lazy execution
 
 ---
 
@@ -203,23 +242,20 @@ Configured:
 
 - Exponential Backoff
 - 3 retry attempts
-- Retry only for recoverable exceptions
-- `before_sleep_log`
-
-Current retry policy:
+- Retry only recoverable errors
 
 Retry:
 
 - Timeout
-- Rate Limit (future)
+- Rate Limit
 
-Do NOT Retry:
+No Retry:
 
 - Authentication
 - Invalid Response
 - Unknown Errors
 
-Retry belongs to the Provider layer.
+Retry currently applies only to non-streaming responses.
 
 ---
 
@@ -227,44 +263,17 @@ Retry belongs to the Provider layer.
 
 Implemented provider-level exception mapping.
 
-Purpose:
-
-- Hide Gemini SDK exceptions
-- Expose only domain exceptions
-
-Current mappings:
+Mappings:
 
 - ValidationError → AIInvalidResponseError
 - TimeoutError → AITimeoutError
 - Unknown Exception → AIServiceError
 
-Architecture:
-
-```
-Gemini SDK Exception
-        │
-        ▼
-GeminiProvider
-        │
-        ▼
-Domain Exception
-        │
-        ▼
-ChatService
-```
-
-Learned:
-
-- Domain Exceptions
-- Exception Mapping
-- Exception Classification
-- Retryable vs Non-Retryable Exceptions
-
 ---
 
 ### Circuit Breaker
 
-Implemented custom Circuit Breaker.
+Implemented:
 
 States:
 
@@ -272,107 +281,30 @@ States:
 - OPEN
 - HALF_OPEN
 
-Methods:
-
-- before_request()
-- record_success()
-- record_failure()
-- \_open()
-
-Features:
-
-- Consecutive failure counting
-- Recovery timeout
-- Automatic state transition
-
-```
-CLOSED
-    │
-    ▼
-OPEN
-    │
-(after timeout)
-    ▼
-HALF_OPEN
-    │        │
-Success    Failure
-    │        │
-    ▼        ▼
-CLOSED    OPEN
-```
-
-Integrated inside `GeminiProvider`.
-
-Current flow:
-
-```
-ChatService
-      │
-      ▼
-GeminiProvider
-      │
-      ▼
-CircuitBreaker.before_request()
-      │
-      ▼
-Gemini API
-      │
-      ├── Success
-      │       │
-      │       ▼
-      │ record_success()
-      │
-      └── Failure
-              │
-              ▼
-        record_failure()
-```
-
-Learned:
-
-- Retry vs Circuit Breaker
-- Fail Fast
-- Recovery Testing
-- HALF_OPEN state
-- Shared dependency injection
+Integrated inside GeminiProvider.
 
 ---
 
 ### Logging
 
-Implemented production logging.
-
-Features:
+Implemented:
 
 - Rich Logging
 - Request ID
 - ContextVars
 - Logging Filter
-- Custom Rich Handler
+- Custom Handler
 - Tracebacks
-- Uvicorn integration
-
-Current logs include:
-
-- Request ID
-- Logger
-- Timestamp
-- Level
-- Message
-
-Future:
-
-- JSON Logging
-- Structured Provider Metrics
+- Uvicorn Integration
 
 ---
 
-### Request Middleware
+### Middleware
 
 Implemented:
 
-- UUID Request ID
-- ContextVar integration
+- Request ID
+- ContextVar
 - Response Header
 - Cleanup
 
@@ -380,7 +312,7 @@ Implemented:
 
 ### Error Handling
 
-Current custom exceptions:
+Implemented:
 
 - AIServiceError
 - AIRateLimitError
@@ -390,25 +322,31 @@ Current custom exceptions:
 - AICircuitOpenError
 - ConversationNotFoundError
 
-Rollback handling implemented inside ChatService.
+Rollback handled inside ChatService.
 
 ---
 
 ### Transaction Pattern
 
-Current design:
+Current Design:
 
-- Routes own commits
-- Services use flush()/refresh()
-- ChatService executes one transaction
+Routes
 
-Following Unit of Work architecture.
+↓
+
+ChatService
+
+↓
+
+Commit / Rollback
+
+Streaming transaction handled inside ChatService because generator execution continues after route returns.
 
 ---
 
 ### Dependency Injection
 
-Current dependency graph:
+Dependency graph:
 
 ```
 FastAPI Route
@@ -426,98 +364,50 @@ FallbackProvider
 GeminiProvider
 ```
 
-Current injected dependencies:
-
-- Database Session
-- Gemini Client (Singleton)
-- Circuit Breaker (Singleton)
-- GeminiProvider
-- FallbackProvider
-- Services
-
-Provider composition happens only inside the Dependency Injection layer.
-
----
-
-# Architecture Principles Learned
-
-## Provider Pattern
-
-Business layer never imports Gemini SDK.
-
-```
-ChatService
-      │
-      ▼
-AIProvider
-      │
-      ▼
-FallbackProvider
-      │
-      ▼
-GeminiProvider
-```
-
----
-
-## Dependency Injection
-
 Injected:
 
 - Database Session
 - Gemini Client
 - Circuit Breaker
-- AI Provider
+- GeminiProvider
+- FallbackProvider
 - Services
 
 ---
 
-## Separation of Responsibilities
+# Architecture Principles Learned
 
-ConversationService
-
-- Conversation CRUD
-
-MessageService
-
-- Message Persistence
-
-ChatService
-
+- Layered Architecture
+- Provider Pattern
+- Provider Fallback
+- Dependency Injection
+- Service Layer
+- Unit of Work
+- Exception Mapping
+- Retry Pattern
+- Circuit Breaker
+- Streaming Architecture
+- Separation of Concerns
 - Business Orchestration
-
-GeminiProvider
-
-- AI Communication
-
-FallbackProvider
-
-- Provider Selection
-- Failover
-
-CircuitBreaker
-
-- Provider Resilience
 
 ---
 
 # Production Concepts Learned
 
-- Layered Architecture
-- Dependency Injection
-- Provider Pattern
-- Provider Fallback
-- Retry Pattern
-- Circuit Breaker Pattern
-- Structured Logging
-- Request Correlation
-- Unit of Work
+- Retry
+- Circuit Breaker
 - Fail Fast
 - Exponential Backoff
-- Exception Mapping
-- Exception Classification
-- Failover Strategy
-- Composition Root
+- Structured Logging
+- Request Correlation
+- Provider Pattern
+- Dependency Injection
+- Repository Pattern
+- Service Layer
+- StreamingResponse
+- Python Generators
+- Iterator Pattern
+- Token Streaming
 
 ---
 
@@ -525,37 +415,28 @@ CircuitBreaker
 
 Continue in this order.
 
-## 1. Streaming Responses (Current Next Topic) ⭐
+## 1. Server-Sent Events (SSE) ⭐
+
+Current streaming works.
+
+Next improve it by implementing proper SSE.
 
 Implement:
 
-- Server-Sent Events (SSE)
-- StreamingResponse
-- Token Streaming
-- Provider Streaming API
-
-Architecture:
-
-```
-ChatService
-      │
-      ▼
-AIProvider.stream_response()
-      │
-      ▼
-GeminiProvider
-      │
-      ▼
-Gemini Streaming API
-```
+- text/event-stream
+- SSE Event Format
+- data: <chunk>\n\n
+- End Events
+- Error Events
+- Heartbeat Events
+- SSE Formatter
 
 Learn:
 
-- Generators
-- Yield
-- StreamingResponse
-- SSE
-- Token Streaming
+- SSE Protocol
+- Browser EventSource
+- fetch() Streaming
+- Event framing
 
 ---
 
@@ -568,6 +449,7 @@ Implement:
 - Delete Conversation
 - Pagination
 - Search
+- Conversation Listing
 
 ---
 
@@ -591,6 +473,8 @@ Implement:
 - Environment Separation
 - Health Checks
 - Metrics
+- OpenTelemetry
+- Prometheus
 - CI/CD
 - Deployment
 
@@ -606,34 +490,36 @@ Rules:
 - Explain why before coding.
 - Let me implement first.
 - Follow production architecture.
-- Compare with Node.js/Express when useful.
-- Focus on clean, scalable AI backend engineering.
+- Compare with Node.js when useful.
 - Prioritize understanding over speed.
 
 ---
 
 # Current State
 
-The project has evolved into a production-style AI backend featuring:
+The backend now supports:
 
 - Clean Layered Architecture
-- Repository/Service Pattern
+- Repository Pattern
+- Service Layer
 - Dependency Injection
 - Provider Pattern
 - Provider Fallback
-- Retry Mechanism
+- Retry
 - Circuit Breaker
 - Exception Mapping
-- Exception Classification
 - Structured Logging
 - Request Correlation
-- Unit of Work
-- Production-ready Dependency Composition
+- Streaming Responses
+- Production-style Transaction Handling
 
-Current architecture:
+Current Architecture:
 
 ```
 FastAPI
+    │
+    ▼
+StreamingResponse
     │
     ▼
 ChatService
@@ -651,6 +537,6 @@ GeminiProvider
 Gemini API
 ```
 
-The architecture is now ready to support multiple AI providers without changing the business layer.
+The project is now capable of returning both normal and streamed AI responses while keeping the business layer completely independent of the AI provider.
 
-The next milestone is **Streaming Responses (SSE)**, followed by Conversation Features, Authentication, and Production Deployment.
+The next milestone is implementing **proper Server-Sent Events (SSE)**, followed by Conversation Features, Authentication, and Production Deployment.

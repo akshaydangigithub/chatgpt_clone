@@ -1,3 +1,4 @@
+from collections.abc import Iterator
 from typing import Any
 
 from app.exceptions.ai import AIServiceError
@@ -29,6 +30,38 @@ class FallbackProvider(AIProvider):
                 )
 
                 return provider.generate_response(history)
+
+            except AIServiceError as e:
+                logger.warning(
+                    "Provider '%s' failed: %s",
+                    provider.__class__.__name__,
+                    str(e),
+                )
+
+                failures.append(f"{provider.__class__.__name__}: {e}")
+
+        error_message = "All AI providers failed.\n" + "\n".join(failures)
+
+        logger.error(error_message)
+
+        raise AIServiceError(error_message)
+
+    def stream_response(
+        self,
+        history: list[dict[str, Any]],
+    ) -> Iterator[str]:
+
+        failures: list[str] = []
+
+        for provider in self.providers:
+            try:
+                logger.info(
+                    "Trying provider (stream): %s",
+                    provider.__class__.__name__,
+                )
+
+                yield from provider.stream_response(history)
+                return
 
             except AIServiceError as e:
                 logger.warning(

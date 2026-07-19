@@ -1,26 +1,49 @@
-from fastapi import APIRouter, status, Depends
-from app.schemas.chat import ChatRequest, AIResponse
+from fastapi import APIRouter, Depends, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from app.services.chat_service import ChatService
-import logging
 
-from app.dependencies import get_chat_service
 from app.core.database import get_db
+from app.dependencies import get_chat_service
+from app.schemas.chat import AIResponse, ChatRequest
+from app.services.chat_service import ChatService
 
-router = APIRouter(prefix="/chat", tags=["Chat"])
+router = APIRouter(
+    prefix="/chat",
+    tags=["Chat"],
+)
 
-logger = logging.getLogger(__name__)
 
-
-@router.post("/", response_model=AIResponse, status_code=status.HTTP_200_OK)
+@router.post(
+    "/",
+    response_model=AIResponse,
+    status_code=status.HTTP_200_OK,
+)
 def chat(
     request: ChatRequest,
     db: Session = Depends(get_db),
     chat_service: ChatService = Depends(get_chat_service),
 ):
+    return chat_service.generate_response(
+        db=db,
+        request=request,
+    )
 
-    response = chat_service.generate_response(db, request)
 
-    db.commit()
-
-    return response
+@router.post("/stream")
+def stream_chat(
+    request: ChatRequest,
+    db: Session = Depends(get_db),
+    chat_service: ChatService = Depends(get_chat_service),
+):
+    return StreamingResponse(
+        chat_service.stream_response(
+            db=db,
+            request=request,
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

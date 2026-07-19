@@ -12,7 +12,6 @@ from google.genai import types
 from app.exceptions.ai import (
     AIInvalidResponseError,
     AIServiceError,
-    AIAuthenticationError,
     AIRateLimitError,
     AITimeoutError,
 )
@@ -22,6 +21,7 @@ import logging
 from typing import Any
 from app.core.circuit_breaker import CircuitBreaker
 from pydantic import ValidationError
+from collections.abc import Iterator
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +80,42 @@ class GeminiProvider(AIProvider):
         except Exception as e:
             self.breaker.record_failure()
             logger.exception("Gemini request failed")
+            raise self._map_exception(e) from e
+
+    def stream_response(
+        self,
+        history: list[dict[str, Any]],
+    ) -> Iterator[str]:
+        """
+        Stream AI response chunks from Gemini.
+
+        Yields:
+            Plain text chunks from the AI provider.
+        """
+
+        self.breaker.before_request()
+
+        try:
+            logger.info("Calling Gemini Stream API")
+
+            stream = self.client.models.generate_content_stream(
+                model=self.model,
+                contents=history,
+            )
+
+            for chunk in stream:
+                if not hasattr(chunk, "text"):
+                    continue
+
+                if chunk.text:
+                    yield chunk.text
+
+            self.breaker.record_success()
+            logger.info("Gemini stream completed successfully")
+
+        except Exception as e:
+            self.breaker.record_failure()
+            logger.exception("Gemini streaming failed")
             raise self._map_exception(e) from e
 
     def _map_exception(self, exc: Exception) -> Exception:
