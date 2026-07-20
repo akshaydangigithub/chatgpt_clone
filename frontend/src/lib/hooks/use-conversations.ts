@@ -15,7 +15,6 @@ import { queryKeys } from "@/lib/query/keys";
 import { useAuthStore } from "@/lib/store/auth-store";
 import type { Conversation, ConversationListResponse } from "@/types/api";
 
-/** Paginated / searchable conversation list for the sidebar. */
 export function useConversations(search: string, page = 1) {
   const token = useAuthStore((s) => s.token);
   const params = { page, pageSize: CONVERSATIONS_PAGE_SIZE, search };
@@ -124,7 +123,6 @@ export function useDeleteConversation() {
   });
 }
 
-/** Look up a single conversation from any cached list page (no extra request). */
 export function useCachedConversation(id: string | undefined): Conversation | undefined {
   const queryClient = useQueryClient();
   if (!id) return undefined;

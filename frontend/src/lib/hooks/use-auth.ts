@@ -11,7 +11,6 @@ import { queryKeys } from "@/lib/query/keys";
 import { useAuthStore } from "@/lib/store/auth-store";
 import type { LoginPayload, RegisterPayload } from "@/types/api";
 
-/** The authenticated user, fetched lazily once a token exists. */
 export function useMe() {
   const token = useAuthStore((s) => s.token);
   const setUser = useAuthStore((s) => s.setUser);

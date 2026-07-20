@@ -1,13 +1,5 @@
 import { create } from "zustand";
 
-/**
- * Bridges the "new chat" screen and the conversation screen.
- *
- * When a user sends the first message from `/`, we create the conversation,
- * stash the message here keyed by the new conversation id, and navigate to
- * `/c/:id`. That page then *consumes* the pending message and kicks off the
- * stream — so the first prompt survives the route change without a query param.
- */
 interface PendingState {
   pending: Record<string, string>;
   setPending: (conversationId: string, message: string) => void;

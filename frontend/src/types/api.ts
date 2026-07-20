@@ -1,10 +1,3 @@
-/**
- * TypeScript mirrors of the FastAPI/Pydantic schemas.
- *
- * These are hand-written to match `backend/app/schemas/*`. If the backend
- * contract changes, update these types in lockstep.
- */
-
 /* ----------------------------------------------------------------- Auth -- */
 
 export interface User {
@@ -48,10 +41,6 @@ export interface ConversationListResponse {
 
 /* -------------------------------------------------------------- Messages -- */
 
-/**
- * Backend role vocabulary: the assistant is stored as `"model"` (Gemini
- * convention), the human as `"user"`.
- */
 export type MessageRole = "user" | "model";
 
 export interface Message {

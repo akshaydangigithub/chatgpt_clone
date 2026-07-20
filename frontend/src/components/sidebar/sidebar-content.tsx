@@ -15,7 +15,6 @@ import { cn } from "@/lib/utils";
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value";
 import { useConversations } from "@/lib/hooks/use-conversations";
 
-/** The full sidebar body, reused by the desktop rail and the mobile sheet. */
 export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 300);

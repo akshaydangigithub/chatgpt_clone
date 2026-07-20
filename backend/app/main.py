@@ -18,8 +18,6 @@ app = FastAPI(
 )
 register_exception_handlers(app)
 
-# Allow the Next.js frontend (and any configured origins) to call the API from
-# the browser. Origins are configured via the CORS_ORIGINS env var.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,

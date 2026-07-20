@@ -7,7 +7,6 @@ import type { User } from "@/types/api";
 interface AuthState {
   token: string | null;
   user: User | null;
-  /** Becomes true once the persisted state has rehydrated on the client. */
   hydrated: boolean;
 
   setToken: (token: string) => void;
@@ -16,11 +15,6 @@ interface AuthState {
   setHydrated: () => void;
 }
 
-/**
- * A lightweight, non-httpOnly auth hint cookie. It carries no secret — it only
- * lets us know client-side whether a session likely exists so redirects don't
- * flash. The real credential is the bearer token in localStorage.
- */
 function writeAuthCookie(authed: boolean) {
   if (typeof document === "undefined") return;
   if (authed) {
@@ -59,12 +53,10 @@ export const useAuthStore = create<AuthState>()(
   ),
 );
 
-/** Read the current bearer token outside of React (e.g. axios interceptors). */
 export function getAuthToken(): string | null {
   return useAuthStore.getState().token;
 }
 
-/** Clear the session outside of React (e.g. on a 401). */
 export function clearAuth() {
   useAuthStore.getState().logout();
 }

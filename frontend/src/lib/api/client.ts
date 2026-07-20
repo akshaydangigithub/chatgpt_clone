@@ -9,7 +9,6 @@ import { ROUTES } from "@/lib/constants";
 import { clearAuth, getAuthToken } from "@/lib/store/auth-store";
 import type { ApiErrorBody } from "@/types/api";
 
-/** A normalised error surfaced to the UI layer. */
 export class ApiError extends Error {
   status: number;
   constructor(message: string, status: number) {
@@ -25,7 +24,6 @@ export const apiClient: AxiosInstance = axios.create({
   timeout: 60_000,
 });
 
-/** Attach the bearer token to every outgoing request. */
 apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = getAuthToken();
   if (token) {
@@ -34,7 +32,6 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config;
 });
 
-/** Normalise errors and transparently handle expired/invalid sessions. */
 apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError<ApiErrorBody>) => {
@@ -46,8 +43,6 @@ apiClient.interceptors.response.use(
       error.message ||
       "Something went wrong. Please try again.";
 
-    // A 401 means the session is gone: clear it and bounce to login, but never
-    // redirect while the user is *already* on an auth page.
     if (status === 401 && typeof window !== "undefined") {
       clearAuth();
       const path = window.location.pathname;
@@ -60,7 +55,6 @@ apiClient.interceptors.response.use(
   },
 );
 
-/** Human-readable message extraction for any thrown error. */
 export function getErrorMessage(error: unknown): string {
   if (error instanceof ApiError) return error.message;
   if (error instanceof Error) return error.message;

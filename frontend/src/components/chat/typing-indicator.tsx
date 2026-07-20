@@ -2,7 +2,6 @@
 
 import { motion } from "framer-motion";
 
-/** Three bouncing dots shown before the first assistant token arrives. */
 export function TypingIndicator() {
   return (
     <div className="flex items-center gap-1 py-1">

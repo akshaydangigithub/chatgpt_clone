@@ -8,32 +8,19 @@ import { queryKeys } from "@/lib/query/keys";
 import { useConversationMessages } from "@/lib/hooks/use-messages";
 import type { ChatMessage } from "@/types/chat";
 
-/**
- * Generate a stable-ish client id for optimistic messages. We avoid
- * `crypto.randomUUID` collisions with server ids by prefixing.
- */
 function draftId(role: string) {
   return `draft-${role}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export interface UseChatResult {
-  /** Persisted messages + any in-flight optimistic ones, in order. */
   messages: ChatMessage[];
   isStreaming: boolean;
   isLoadingHistory: boolean;
-  /** Send a message and stream the assistant reply. */
   send: (text: string) => Promise<void>;
-  /** Abort the in-flight generation. */
   stop: () => void;
-  /** Retry the last user message (after an error). */
   regenerate: () => Promise<void>;
 }
 
-/**
- * Owns the full chat lifecycle for one conversation: it merges persisted
- * history (TanStack Query) with optimistic drafts, drives the SSE stream, and
- * reconciles once generation completes.
- */
 export function useChat(conversationId: string): UseChatResult {
   const queryClient = useQueryClient();
   const { data: history, isLoading: isLoadingHistory } =
@@ -100,20 +87,13 @@ export function useChat(conversationId: string): UseChatResult {
             patchDraft(assistantId, { streaming: false });
             setIsStreaming(false);
             abortRef.current = null;
-            // Refetch the source of truth, then drop the optimistic drafts so
-            // the persisted messages take over without a visible flicker.
             await queryClient.invalidateQueries({
               queryKey: queryKeys.conversations.messages(conversationId),
             });
-            // Only hand off to server history once it has actually caught up.
-            // If the refetch came back empty (a transient backend race), keep
-            // the completed drafts on screen rather than blanking the chat.
             const fresh = queryClient.getQueryData<ChatMessage[]>(
               queryKeys.conversations.messages(conversationId),
             );
             if (fresh && fresh.length > 0) setDrafts([]);
-            // Refresh the sidebar (new title lands on the first exchange). Not
-            // awaited — it doesn't gate the draft hand-off above.
             void queryClient.invalidateQueries({
               queryKey: queryKeys.conversations.all,
             });

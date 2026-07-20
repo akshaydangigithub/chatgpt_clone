@@ -5,7 +5,6 @@ import { ChatEmpty } from "@/components/chat/chat-empty";
 import { ChatInput } from "@/components/chat/chat-input";
 import { useStartNewChat } from "@/lib/hooks/use-new-chat";
 
-/** The `/` landing view: welcome hero + composer that spins up a conversation. */
 export function NewChat() {
   const { start, isCreating } = useStartNewChat();
 

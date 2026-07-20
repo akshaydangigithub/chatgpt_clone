@@ -1,4 +1,3 @@
-/** Application-wide constants. */
 
 export const APP = {
   name: "Nova Chat",
@@ -7,10 +6,8 @@ export const APP = {
     "A fast, elegant AI chat experience powered by Google Gemini.",
 } as const;
 
-/** Key used to persist the auth store in localStorage. */
 export const AUTH_STORAGE_KEY = "nova-chat-auth";
 
-/** Cookie used only as a hint for redirect logic (not for auth). */
 export const AUTH_COOKIE_KEY = "nova-chat-authed";
 
 export const ROUTES = {
@@ -20,10 +17,8 @@ export const ROUTES = {
   conversation: (id: string) => `/c/${id}`,
 } as const;
 
-/** Pagination defaults for the conversation list. */
 export const CONVERSATIONS_PAGE_SIZE = 20;
 
-/** Prompt suggestions shown on the empty state. */
 export const SUGGESTED_PROMPTS = [
   {
     title: "Explain a concept",

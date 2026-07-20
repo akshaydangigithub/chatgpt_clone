@@ -8,7 +8,6 @@ import { cn } from "@/lib/utils";
 
 type Props = React.ComponentProps<typeof Input>;
 
-/** A password field with an inline show/hide toggle. */
 export const PasswordInput = forwardRef<HTMLInputElement, Props>(
   function PasswordInput({ className, ...props }, ref) {
     const [visible, setVisible] = useState(false);

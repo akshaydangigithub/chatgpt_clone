@@ -6,14 +6,6 @@ import { useEffect } from "react";
 import { ROUTES } from "@/lib/constants";
 import { useAuthStore } from "@/lib/store/auth-store";
 
-/**
- * Client-side route protection. Because the bearer token lives in
- * localStorage (not an httpOnly cookie), gating happens on the client once the
- * persisted store has rehydrated.
- *
- * @param mode "protected" redirects unauthenticated users to /login;
- *             "guest" redirects authenticated users away from auth pages.
- */
 export function useAuthGuard(mode: "protected" | "guest") {
   const router = useRouter();
   const token = useAuthStore((s) => s.token);

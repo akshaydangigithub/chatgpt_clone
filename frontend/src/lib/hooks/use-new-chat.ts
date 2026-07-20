@@ -9,11 +9,6 @@ import { conversationsApi } from "@/lib/api/conversations";
 import { ROUTES } from "@/lib/constants";
 import { usePendingStore } from "@/lib/store/pending-store";
 
-/**
- * Starts a brand-new conversation from the home screen: create it on the
- * backend, stash the first prompt, then navigate to the conversation page
- * which picks up and streams the pending message.
- */
 export function useStartNewChat() {
   const router = useRouter();
   const setPending = usePendingStore((s) => s.setPending);

@@ -1,12 +1,10 @@
 import { create } from "zustand";
 
 interface UIState {
-  /** Desktop sidebar collapsed state. */
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
   setSidebarCollapsed: (v: boolean) => void;
 
-  /** Mobile sidebar (Sheet) open state. */
   mobileSidebarOpen: boolean;
   setMobileSidebarOpen: (v: boolean) => void;
 }

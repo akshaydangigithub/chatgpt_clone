@@ -8,7 +8,6 @@ export function getInitials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-/** A concise, human date label for a message timestamp. */
 export function formatMessageTime(iso: string): string {
   const date = new Date(iso);
   const time = date.toLocaleTimeString(undefined, {
@@ -38,7 +37,6 @@ export interface ConversationGroup {
 
 const DAY = 24 * 60 * 60 * 1000;
 
-/** Bucket conversations into ChatGPT-style time groups (already sorted desc). */
 export function groupConversationsByDate(
   conversations: Conversation[],
 ): ConversationGroup[] {

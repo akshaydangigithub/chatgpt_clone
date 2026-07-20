@@ -2,7 +2,6 @@ import { Sparkles } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-/** The app mark: a gradient rounded square with a spark glyph. */
 export function Logo({
   className,
   size = 32,

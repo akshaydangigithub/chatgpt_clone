@@ -4,19 +4,11 @@ import { clearAuth, getAuthToken } from "@/lib/store/auth-store";
 import type { ChatRequest } from "@/types/api";
 
 export interface StreamHandlers {
-  /** Called for every text token as it arrives. */
   onChunk: (text: string) => void;
-  /** Called once the backend signals completion. */
   onDone: () => void;
-  /** Called on a transport or server-side streaming error. */
   onError: (message: string) => void;
 }
 
-/**
- * Parse a single SSE frame (the text between two blank lines) into an event
- * name and its `data` payload. Comment lines (heartbeats, starting with `:`)
- * are ignored.
- */
 function parseFrame(frame: string): { event: string; data: string } | null {
   let event = "message";
   const dataLines: string[] = [];
@@ -35,16 +27,6 @@ function parseFrame(frame: string): { event: string; data: string } | null {
   return { event, data: dataLines.join("\n") };
 }
 
-/**
- * Stream a chat completion over SSE.
- *
- * We use `fetch` + a `ReadableStream` reader (rather than `EventSource`) because
- * the endpoint is a POST that requires a bearer token — neither of which the
- * native `EventSource` API supports.
- *
- * Returns a promise that resolves when the stream ends. Pass an `AbortSignal`
- * to cancel generation.
- */
 export async function streamChat(
   body: ChatRequest,
   handlers: StreamHandlers,

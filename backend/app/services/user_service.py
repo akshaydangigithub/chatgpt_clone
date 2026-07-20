@@ -45,9 +45,6 @@ class UserService:
     def authenticate(self, db: Session, username: str, password: str) -> User:
         user = self.get_by_username(db, username)
 
-        # Verify even when the user is missing? We short-circuit here for
-        # simplicity; the same generic error is returned either way so we
-        # don't leak which usernames exist.
         if user is None or not verify_password(password, user.password_hash):
             raise InvalidCredentialsError()
 

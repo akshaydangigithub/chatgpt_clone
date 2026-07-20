@@ -6,7 +6,6 @@ import { conversationsApi } from "@/lib/api/conversations";
 import { queryKeys } from "@/lib/query/keys";
 import { toChatRole, type ChatMessage } from "@/types/chat";
 
-/** Persisted messages for a conversation, normalised to UI `ChatMessage`s. */
 export function useConversationMessages(id: string | undefined) {
   return useQuery({
     queryKey: id ? queryKeys.conversations.messages(id) : ["messages", "none"],

@@ -12,10 +12,6 @@ export const authApi = {
     return data;
   },
 
-  /**
-   * The backend login route expects OAuth2 form-encoded credentials
-   * (`application/x-www-form-urlencoded`), not JSON.
-   */
   async login(payload: LoginPayload): Promise<TokenResponse> {
     const form = new URLSearchParams();
     form.append("username", payload.username);

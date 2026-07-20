@@ -2,7 +2,6 @@ import { QueryClient } from "@tanstack/react-query";
 
 import { ApiError } from "@/lib/api/client";
 
-/** Factory so the server and client each get their own QueryClient. */
 export function makeQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: {

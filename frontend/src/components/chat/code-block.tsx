@@ -6,11 +6,6 @@ import { useRef } from "react";
 import { useCopyToClipboard } from "@/lib/hooks/use-copy-to-clipboard";
 import { cn } from "@/lib/utils";
 
-/**
- * A fenced code block with a language label and copy button. The highlighted
- * child nodes (produced by rehype-highlight) are rendered as-is; copy reads the
- * raw text content off the DOM so it never includes markup.
- */
 export function CodeBlock({
   language,
   className,

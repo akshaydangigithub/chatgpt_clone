@@ -1,6 +1,5 @@
 import { z } from "zod";
 
-/** Mirrors the backend `UserRegisterRequest` constraints. */
 export const registerSchema = z.object({
   username: z
     .string()

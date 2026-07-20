@@ -36,8 +36,6 @@ const components: Components = {
   ),
 };
 
-/** Renders assistant markdown with GFM + syntax highlighting. Memoised so a
- * streaming parent only re-parses when the text actually changes. */
 export const Markdown = memo(function Markdown({
   content,
   className,
