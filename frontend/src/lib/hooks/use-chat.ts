@@ -105,10 +105,18 @@ export function useChat(conversationId: string): UseChatResult {
             await queryClient.invalidateQueries({
               queryKey: queryKeys.conversations.messages(conversationId),
             });
-            await queryClient.invalidateQueries({
+            // Only hand off to server history once it has actually caught up.
+            // If the refetch came back empty (a transient backend race), keep
+            // the completed drafts on screen rather than blanking the chat.
+            const fresh = queryClient.getQueryData<ChatMessage[]>(
+              queryKeys.conversations.messages(conversationId),
+            );
+            if (fresh && fresh.length > 0) setDrafts([]);
+            // Refresh the sidebar (new title lands on the first exchange). Not
+            // awaited — it doesn't gate the draft hand-off above.
+            void queryClient.invalidateQueries({
               queryKey: queryKeys.conversations.all,
             });
-            setDrafts([]);
           },
           onError: (message) => {
             patchDraft(assistantId, {

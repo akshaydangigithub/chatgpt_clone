@@ -51,10 +51,10 @@ export function useRenameConversation() {
     // Optimistically patch every cached list page.
     onMutate: async ({ id, title }) => {
       await queryClient.cancelQueries({
-        queryKey: queryKeys.conversations.all,
+        queryKey: queryKeys.conversations.lists,
       });
       const snapshots = queryClient.getQueriesData<ConversationListResponse>({
-        queryKey: queryKeys.conversations.all,
+        queryKey: queryKeys.conversations.lists,
       });
       for (const [key, data] of snapshots) {
         if (!data) continue;
@@ -89,10 +89,10 @@ export function useDeleteConversation() {
     mutationFn: (id: string) => conversationsApi.remove(id),
     onMutate: async (id) => {
       await queryClient.cancelQueries({
-        queryKey: queryKeys.conversations.all,
+        queryKey: queryKeys.conversations.lists,
       });
       const snapshots = queryClient.getQueriesData<ConversationListResponse>({
-        queryKey: queryKeys.conversations.all,
+        queryKey: queryKeys.conversations.lists,
       });
       for (const [key, data] of snapshots) {
         if (!data) continue;
@@ -129,10 +129,10 @@ export function useCachedConversation(id: string | undefined): Conversation | un
   const queryClient = useQueryClient();
   if (!id) return undefined;
   const lists = queryClient.getQueriesData<ConversationListResponse>({
-    queryKey: queryKeys.conversations.all,
+    queryKey: queryKeys.conversations.lists,
   });
   for (const [, data] of lists) {
-    const found = data?.conversations.find((c) => c.id === id);
+    const found = data?.conversations?.find((c) => c.id === id);
     if (found) return found;
   }
   return undefined;

@@ -253,8 +253,14 @@ class ChatService:
                 assistant_message,
             )
 
-            yield format_done()
-
+            # Generate the title (first exchange only) and commit BEFORE we
+            # signal completion. The client reconciles its optimistic drafts
+            # against a refetch the instant it receives `done`, so everything it
+            # reads back — both persisted messages and the freshly generated
+            # title — must already be committed. Committing after `done` (as we
+            # used to) let the refetch race an open transaction: it saw stale,
+            # empty data, blanked the chat window, and missed the new title
+            # until a manual refresh.
             await self._generate_conversation_title(
                 db,
                 request,
@@ -263,6 +269,8 @@ class ChatService:
             )
 
             db.commit()
+
+            yield format_done()
 
             logger.info(
                 "Streaming completed for conversation %s",
